@@ -9,7 +9,6 @@ draft/
 *.pdf
 .env.*
 !.env.example
-.claude/
 .pytest_last.json
 .analytics_events.jsonl
 *.log
