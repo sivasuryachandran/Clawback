@@ -11,6 +11,7 @@ from __future__ import annotations
 from backend.db import execute, query, using_singlestore
 from backend.ingest.embed import (
     cosine_similarity,
+    embedding_backend,
     get_embedding,
     rerank,
     vec_from_json,
@@ -121,4 +122,7 @@ def match(line_item_id: int) -> list[dict]:
     top10 = _top10_singlestore(item, item_vec) if using_singlestore() else _top10_python(item, item_vec)
     reranked = rerank(item["title"], top10)
     reranked.sort(key=lambda c: c["rerank_score"], reverse=True)
+    backend_label = embedding_backend()  # honest labeling for Under the hood -- never implies SIE ran
+    for c in reranked:
+        c["embedding_backend"] = backend_label
     return reranked[:5]
