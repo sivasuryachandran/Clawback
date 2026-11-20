@@ -7,7 +7,6 @@ node_modules/
 # planning docs and the v3 reference zip stay local (reference code is read-only per the rules)
 draft/
 *.pdf
-clawback-team-split-v4*.md
 .env.*
 !.env.example
 .claude/
