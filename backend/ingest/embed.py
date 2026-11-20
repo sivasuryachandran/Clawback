@@ -1,10 +1,14 @@
-"""Embeddings + rerank for item/listing titles (Superlinked SIE Serverless prize).
+"""Embeddings + rerank for item/listing titles.
 
-get_embedding() calls SIE's OpenAI-compatible /v1/embeddings endpoint when SIE_URL/
-SIE_API_KEY are set. With no SIE credentials, falls back to a small deterministic
-hashed bag-of-words vector so matching still works end to end for local dev and tests
-(no network, no API key needed). Swap in real creds and nothing else in the matcher
-changes: both paths return a list[float] of length EMBEDDING_DIM.
+NOT claiming the Superlinked SIE Serverless prize -- SIE isn't a focus sponsor this
+round. What's actually running is the OFFLINE fallback below: a deterministic hashed
+bag-of-words vector, no network call, no API key. get_embedding() would call SIE's
+OpenAI-compatible /v1/embeddings endpoint if SIE_URL/SIE_API_KEY were ever set (both
+are empty in .env), but that path is unused and unverified live -- don't present it as
+working. Either path returns a list[float] of length EMBEDDING_DIM, so the matcher
+doesn't care which one ran; match()'s result only reports plain similarity scores, not
+which embedding backend produced them, so label this clearly wherever it's surfaced to
+judges (e.g. the Matching panel) rather than implying SIE.
 """
 
 from __future__ import annotations
@@ -40,6 +44,12 @@ def _fallback_embedding(text: str) -> list[float]:
         vec[idx] += sign
     norm = math.sqrt(sum(x * x for x in vec)) or 1.0
     return [x / norm for x in vec]
+
+
+def embedding_backend() -> str:
+    """For honest labeling wherever match() results reach a UI (e.g. Under the hood's
+    Matching panel) -- never imply SIE/Superlinked ran when it didn't."""
+    return "SIE" if (SIE_URL and SIE_API_KEY) else "offline-hashed (not SIE)"
 
 
 def get_embedding(text: str) -> list[float]:
