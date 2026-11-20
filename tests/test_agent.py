@@ -699,3 +699,18 @@ def test_asking_again_reuses_the_open_approval(env):
     first, second = env.propose("lamp"), env.propose("lamp")
     assert first["approval_id"] == second["approval_id"]
     assert len(q("SELECT id FROM approvals")) == 1
+
+
+# ---------- Firedrill drafts (dev/firedrill_local.py) ----------
+
+def test_store_agreement_is_not_money_back(env):
+    t = _thread(env)
+    r = _reply(env, "Good news: the adjustment has been applied to your card.", t)
+    assert r["reply_decision"] == "accept_offer" and not r["sent"]
+    assert q("SELECT status FROM line_items WHERE sku = 'MS-1001'")[0]["status"] == "store_agreed"
+
+
+def test_firedrill_local_scenarios_all_pass():
+    from dev.firedrill_local import run_all
+    results = run_all()
+    assert [r["id"] for r in results if not r["passed"]] == [], results

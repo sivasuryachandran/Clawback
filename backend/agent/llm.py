@@ -102,7 +102,9 @@ def _rule_reply(f: dict) -> dict:
         return {"decision": "escalate_to_user", "reply_to": reply_to,
                 "reasoning": "The store offered something other than the full adjustment. "
                              "You should decide."}
-    if any(k in text for k in ("approved", "has been refunded", "we will refund", "refund issued")) and not found:
+    agreed = ("has been refunded", "we have refunded", "refund has been issued", "refund issued",
+              "adjustment has been applied", "we will refund the difference")
+    if any(k in text for k in agreed) and not found:
         return {"decision": "accept_offer", "reply_to": reply_to,
                 "reasoning": "The store agreed to the adjustment. Nothing else to send."}
     if found or any(k in text for k in ("proof", "receipt", "screenshot", "order number")):

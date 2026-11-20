@@ -77,7 +77,9 @@ def handle_reply(opportunity_id: int, reply_text: str, thread_id: str,
     if choice.decision != "answer_with_proof":
         p = save(assemble(LLMChoice(action_type="none", reasoning=choice.reasoning), f, trigger=trigger))
         pact.record(p, None, "NO_ACTION")
-        status = "needs_you" if choice.decision == "escalate_to_user" else "got_money_back"
+        # The store's word is untrusted: "approved" in a reply is NOT money back. Mark it
+        # "store_agreed"; "Got money back" needs a real signal (refund seen / user confirms).
+        status = "needs_you" if choice.decision == "escalate_to_user" else "store_agreed"
         db.execute("UPDATE line_items SET status = %s WHERE id = %s", (status, f["opp"]["line_item_id"]))
         track("reply_handled", {"opportunity_id": opportunity_id, "decision": choice.decision})
         return {"reply_decision": choice.decision, "decision": "NO_ACTION", "sent": False,
