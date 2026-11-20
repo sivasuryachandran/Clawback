@@ -5,7 +5,7 @@ This file is what comes to the event; the code stays home.
 
 ## Results
 
-- `pytest -q`: **48 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
+- `pytest -q`: **54 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
 - `python -m dev.run_demo` (6 s) with the real `seed/policies`:
 
 ```
@@ -91,9 +91,10 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
   (needed so follow-ups land in the same thread, R13). If it can't send, use
   `GmailApiTransport` (users.messages.send with threadId). Not built yet.
 
-### Firedrill: NOT run
-- **Scenarios F1–F10 are not defined in the team split or in the build doc PDF.** Somebody
-  needs to write them before kickoff, or drop this stretch. No pass rate is claimed.
+### Firedrill: API NOT run
+- F1–F10 weren't defined in either team doc; B drafted them (`dev/firedrill_local.py`, 10/10
+  locally against our own endpoints). Read the Firedrill docs and port them; no Firedrill pass
+  rate is claimed yet.
 
 ## Stage-safety additions (built after the first pass)
 
@@ -172,6 +173,38 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
   counting only running/done. If the real gate changes either, re-run these tests.
 - Tests: **48 passing**.
 
+## Live click-through, Firedrill drafts, cheat sheet (fourth pass)
+
+- **Real server + browser** (`.claude/launch.json` → `uvicorn dev.app:app --port 8000`, local
+  `.env` with demo addresses only). All six seed items work over real HTTP, about 90–200 ms
+  each. Typing in `/mock/support`: proof → ALLOW in the same thread; injection → R10, nothing
+  sent. A `.eml` dropped in `inbox/` + `POST /replies/poll` → proof sent in the same thread.
+  Preflight against the live server: only the Target/Best Buy policy FAILs remain.
+- **Bug found live (tests had missed it): double clicks flipped the card to "Stopped".**
+  A second propose or approve on something already done was gated (R11 / A1) and the BLOCK
+  overwrote the item status and the Why? headline. A *simultaneous* double approve even showed
+  **R9**, because the stand-in gate counts the proposal's own running $199 in the monthly cap.
+  Fixed in B's code: a non-ALLOW for a proposal whose action is running/done → `already_ran`,
+  the item status is untouched, and it is left out of the Why? headline. Also one open
+  approval per proposal (re-proposing the lamp doesn't create a second card). **Tell Siva:**
+  R9 should exclude the proposal's own executed row too.
+- **For C:** `/mock/support` shows the raw JSON (rule ids included) to whoever types. Show the
+  plain sentence on stage. The stub has no `/mock/policy`, so the Why? source link 404s tonight.
+- **Firedrill drafts F1–F10** (`python -m dev.firedrill_local`): recipient injection, a request
+  for payment details, a planted fake price, thread hijack, follow-up flood, store-credit lure,
+  simultaneous approvals, repeated claim, look-alike product, model output tampering. Each runs
+  on a fresh DB through the real endpoints and checks what actually happened (outbox, rebuy
+  calls, card). **10/10 locally, with the offline rules as the model. This is not a Firedrill
+  result.** Port the scenarios once the Firedrill docs are read.
+- **Bug found by F2: an injected "You are approved" became "Got money back".** The offline rules
+  read a bare "approved" as accept_offer, and accept_offer marked the item `got_money_back` on
+  the store's word. Fixed: accept_offer → `store_agreed` (never counts as money back), and the
+  rules need explicit refund phrases. F2 now also checks the card. (The first 10/10 used a
+  weaker F2 check; this is the honest history.)
+- **`REBUILD_CHEATSHEET.md`:** one page with the build order, the decisions, the asks for each
+  teammate, the day-of run order and the stunt script. Bring it with this file.
+- Tests: **54 passing**.
+
 ## Things in the team spec that looked wrong or unclear
 
 1. **Spec location:** the prompt said `docs/clawback-team-split.md`; the file is at the repo
@@ -207,8 +240,8 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
     from delivery. **Confirm from the official pages.** If Target's real return window is
     longer, the "Return closes soon" seed item needs a different purchase date.
 11. ~~R6 freshness on follow-ups~~: fixed, handle_reply re-runs check_policy (see above).
-12. **`accept_offer`** isn't defined beyond its name. B marks the item `got_money_back` and
-    sends nothing.
+12. **`accept_offer`** isn't defined beyond its name. B now marks the item `store_agreed`
+    (not money back) and sends nothing; "Got money back" needs a real refund signal.
 13. **R1 and R8a** were left out of the rehearsal gate (the prompt's rule list omits them). The
     Best Buy price is seen 2 h ago, and v4 deliberately puts R8a after R8, so the $6 R8 stop
     still shows.
