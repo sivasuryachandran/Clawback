@@ -90,11 +90,12 @@ CREATE TABLE IF NOT EXISTS claim_packets (
   id BIGINT AUTO_INCREMENT PRIMARY KEY, opportunity_id BIGINT, proposal_hash VARCHAR(80),
   store VARCHAR(32), packet_json JSON, chat_script TEXT, created_at DATETIME
 );
-
+-- Added for Siva's scheduler (backend/pact/scheduler.py); DDL matches backend/pact/devkit.py's SCHEMA.
 CREATE TABLE IF NOT EXISTS scheduled_tasks (
   id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id VARCHAR(64), name VARCHAR(128), kind VARCHAR(32),
-  schedule_type VARCHAR(16), interval_min INT NULL, at_time VARCHAR(8) NULL, enabled TINYINT DEFAULT 1,
-  next_run DATETIME NULL, last_run DATETIME NULL, last_status VARCHAR(16) NULL, last_result TEXT NULL, created_at DATETIME
+  schedule_type VARCHAR(16), interval_min INT, at_time VARCHAR(16), enabled BOOL DEFAULT TRUE,
+  next_run DATETIME, last_run DATETIME NULL, last_status VARCHAR(16) NULL, last_result TEXT NULL,
+  created_at DATETIME
 );
 CREATE TABLE IF NOT EXISTS scheduled_runs (
   id BIGINT AUTO_INCREMENT PRIMARY KEY, task_id BIGINT, ran_at DATETIME, status VARCHAR(16), result TEXT
