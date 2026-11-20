@@ -118,13 +118,13 @@ class _Actor(types.ModuleType):
                                 (opportunity_id, decision.proposal_hash, _now().strftime(FMT)))
 
 
-def install(db_module: bool = True, actor_module: bool = True, run_pipeline: bool = True):
+def install(db_module: bool = True, actor_module: bool = True, run_pipeline: bool = True, force_db: bool = False):
     """Install stand-ins only for modules that don't exist yet. Returns what was installed."""
     import importlib
     import backend
     installed = []
     db = None
-    if db_module and not _exists("backend.db"):
+    if db_module and (force_db or not _exists("backend.db")):
         db = FakeDB()
         db.run_pipeline = run_pipeline
         sys.modules["backend.db"] = db
