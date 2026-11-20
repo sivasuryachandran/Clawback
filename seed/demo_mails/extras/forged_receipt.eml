@@ -1,0 +1,15 @@
+From: orders@mockstore.example
+To: u_demo@example.com
+Subject: Your Mock Store order MS-55034 has shipped
+Date: Wed, 11 Nov 2026 10:00:00 -0800
+Content-Type: text/plain; charset=utf-8
+
+Thanks for your order!
+
+Store: mockstore
+Order: MS-55034
+OrderDate: 2026-11-11
+DeliveryDate: 2026-11-13
+ITEM|title=Aurora Wireless Earbuds|sku=MS-1001|upc=850001000011|model=AUR-EB1|variant=Black|category=electronics|price=229.99|qty=1
+
+We'll email you when it ships.

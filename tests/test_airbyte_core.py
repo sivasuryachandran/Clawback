@@ -129,3 +129,26 @@ def test_credentials_never_printed(core, monkeypatch, capsys):
     out = ac.ingest()  # psycopg missing or host unreachable -> fallback
     assert out["source"] == "seed_fallback"
     assert "s3cret" not in json.dumps(out) and "s3cret" not in capsys.readouterr().out
+
+
+def test_siva_demo_file_through_a_local_json_destination(core, monkeypatch):
+    """seed/airbyte_demo/receipts.jsonl (File source) as Airbyte's Local JSON destination writes it,
+    under a ~ path exactly as seed/airbyte_demo/README.md documents."""
+    from pathlib import Path
+    ac, calls, tmp = core
+    home = tmp / "home"
+    dest = home / "airbyte-local" / "clawback"
+    dest.mkdir(parents=True)
+    src = [json.loads(l) for l in Path("seed/airbyte_demo/receipts.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    (dest / "_airbyte_raw_messages.jsonl").write_text(
+        "\n".join(json.dumps({"_airbyte_ab_id": f"ab{i}", "_airbyte_emitted_at": 1, "_airbyte_data": r}) for i, r in enumerate(src)),
+        encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))   # Windows expanduser
+    monkeypatch.setenv("AIRBYTE_CORE_DEST", "jsonl:~/airbyte-local/clawback")
+    out = ac.ingest()
+    assert (out["source"], out["read"], out["inserted"]) == ("airbyte_core", len(src), len(src)) and len(src) == 6
+    rows = raw()
+    assert rows[0]["gmail_msg_id"] == src[0]["gmail_msg_id"] and rows[0]["from_addr"] == src[0]["from"]
+    assert rows[0]["subject"] == src[0]["subject"] and rows[0]["body"] == src[0]["body"]
+    assert rows[0]["received_at"] == src[0]["received_at"] and calls == [1]

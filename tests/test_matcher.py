@@ -109,3 +109,51 @@ def test_no_opportunity_when_no_listing_is_cheaper():
     )
     _insert_listing("mockstore", "Breeze Desk Fan", "MS-4004", "U4", None, "Gray", 59.00)
     assert check_line_item_for_drop(li_id) is None
+
+
+# --- forged-receipt cross-check (seed/demo_mails/extras/) -----------------------------
+
+_EXTRAS_DIR = Path(__file__).resolve().parent.parent / "seed" / "demo_mails" / "extras"
+
+
+def _read_eml_body(name: str) -> str:
+    import email
+
+    msg = email.message_from_bytes((_EXTRAS_DIR / name).read_bytes())
+    return msg.get_payload(decode=True).decode()
+
+
+def test_forged_receipt_price_is_zeroed_by_mock_store_cross_check(monkeypatch):
+    """extras/forged_receipt.eml claims $229.99 for the earbuds order MS-55034; the
+    mock store's own record (mocked here) says the real price is $129.99. The parser's
+    cross-check must zero that item's confidence so a forged receipt can't inflate
+    price_paid -- the gate then asks the user (R12) instead of trusting it."""
+    from backend.ingest import parser
+
+    def fake_get(url, timeout=10):
+        class Resp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"items": [{"sku": "MS-1001", "price_paid": 129.99}]}
+
+        assert url.endswith("/mock/api/orders/MS-55034")
+        return Resp()
+
+    monkeypatch.setattr(parser.httpx, "get", fake_get)
+
+    body = _read_eml_body("forged_receipt.eml")
+    parsed = parser._fallback_parse(body)
+    assert parsed["items"][0]["price_paid"] == 229.99
+    assert parsed["items"][0]["confidence"] > 0.9  # the parser itself has no reason to doubt it
+
+    parser._cross_check_mock_store(parsed["order_no"], parsed["items"])
+    assert parsed["items"][0]["confidence"] == 0.0
+
+
+def test_newsletter_is_ignored_not_turned_into_an_order():
+    from backend.ingest import parser
+
+    parsed = parser._fallback_parse(_read_eml_body("newsletter.eml"))
+    assert parsed["items"] == []

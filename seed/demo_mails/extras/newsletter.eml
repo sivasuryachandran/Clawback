@@ -1,0 +1,10 @@
+From: news@mockstore.example
+To: u_demo@example.com
+Subject: This week at Mock Store: new arrivals and deals
+Date: Thu, 19 Nov 2026 09:00:00 -0800
+Content-Type: text/plain; charset=utf-8
+
+Not a receipt. The ingest/parser must not invent an order or line items from this.
+
+Check out what's new this week at Mock Store! Free shipping on orders over $50.
+Reply STOP to unsubscribe from these emails.
