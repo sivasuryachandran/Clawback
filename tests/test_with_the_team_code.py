@@ -31,6 +31,7 @@ def app(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("team")
     env = dict(os.environ, CLAWBACK_API_BASE=base, CLAWBACK_BASE_URL=base, BACKEND_URL=base, ANALYTICS_LOG="off",
                OUTBOX_DIR=str(tmp / "outbox"), INBOX_DIR=str(tmp / "inbox"), LOG_LEVEL="WARNING", PYTHONDONTWRITEBYTECODE="1")
+    env.pop("CLAWBACK_USE_STUBS", None)      # set by tests/conftest.py for B's unit tests; the real stack must not inherit it
     env.pop("PERSONA_API_KEY", None)
     env.pop("LLM_API_KEY", None)
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "backend.dev_app:app", "--port", str(port), "--log-level", "warning"],
