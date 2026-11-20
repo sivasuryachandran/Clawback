@@ -189,7 +189,7 @@ def test_old_version_blocks_r1():
 
 
 def test_edited_pact_blocks_r1():
-    pact = make_pact(); pact["monthly_cap"] = 99999
+    pact = make_pact(); pact["monthly_cap_usd"] = 99999
     assert gate(make_prop(), make_ctx(), pact=pact).failed_rule == "R1"
 
 
@@ -221,7 +221,7 @@ def test_spending_cap_counts_approved_not_run_r9():
 
 def test_per_purchase_cap_r9():
     p, ctx = lamp()
-    d = run_gate(p, make_pact(max_rebuy_price_usd=150, ask_first_above=100), ctx, human_approved=True)
+    d = run_gate(p, make_pact(max_rebuy_price_usd=150, ask_first_above_usd=100), ctx, human_approved=True)
     assert d.failed_rule == "R9"
 
 
@@ -239,7 +239,7 @@ def test_min_savings_r8():
 
 
 def test_action_and_store_permissions_r2_r3():
-    assert gate(make_prop(), make_ctx(), pact=make_pact(allowed_actions=["deadline_alert"])).failed_rule == "R2"
+    assert gate(make_prop(), make_ctx(), pact=make_pact(actions=["deadline_alert"])).failed_rule == "R2"
     assert gate(make_prop(), make_ctx(), pact=make_pact(stores=["target"])).failed_rule == "R3"
 
 

@@ -19,6 +19,7 @@ def env(monkeypatch):
     monkeypatch.setitem(sys.modules, "backend.actor", act)
     monkeypatch.setattr(backend, "actor", act, raising=False)
     monkeypatch.setattr(persona_api, "fetch_inquiry_status", lambda _id: "approved")
+    monkeypatch.setattr(pact_api, "_actor", lambda p, d: (lambda: act.rebuy_return(d, p["rebuy"]["listing_id"], p["return"]["order_no"])))   # unit test: no mock-store server
     devkit.seed(db)
     app = FastAPI(); app.include_router(pact_api.router); app.include_router(persona_api.router)
     return db, TestClient(app)

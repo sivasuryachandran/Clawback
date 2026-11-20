@@ -34,10 +34,10 @@ def _uid(request: Request) -> str:
 class Limits(BaseModel):
     price_adjust: bool = True
     rebuy: bool = True
-    min_net_savings: float = Field(10, ge=0, le=10000)
-    ask_first_above: float = Field(150, ge=0, le=10000)
+    min_net_savings_usd: float = Field(10, ge=0, le=10000)
+    ask_first_above_usd: float = Field(150, ge=0, le=10000)
     max_rebuy_price_usd: float = Field(250, ge=0, le=10000)
-    monthly_cap: float = Field(300, ge=0, le=100000)
+    monthly_cap_usd: float = Field(300, ge=0, le=100000)
     skip_clearance_and_gift_cards: bool = True
     stores: list[str] = ["mockstore", "target", "bestbuy"]
     valid_days: int = Field(90, ge=1, le=365)
@@ -48,7 +48,7 @@ def summary(pact: dict | None, meta: dict) -> dict:
         return {"signed": False}
     return {"signed": True, "paused": meta["revoked"], "current": meta["is_latest"], "version": pact["version"],
             "valid_until": pact["expires_at"], "short_hash": pact["hash"][:8], "limits": {
-                k: pact.get(k) for k in ("min_net_savings", "ask_first_above", "max_rebuy_price_usd", "monthly_cap", "stores", "allowed_actions", "excluded_categories")}}
+                k: pact.get(k) for k in ("min_net_savings_usd", "ask_first_above_usd", "max_rebuy_price_usd", "monthly_cap_usd", "stores", "actions", "excluded_categories")}}
 
 
 @router.get("/pact")
@@ -69,11 +69,11 @@ def post_pact(limits: Limits, request: Request):
     now = _now()
     body = {"pact_id": pact_id, "version": version, "user_id": uid, "persona_inquiry_id": u[0]["persona_inquiry_id"],
             "created_at": now.strftime("%Y-%m-%d"), "expires_at": (now + timedelta(days=limits.valid_days)).strftime("%Y-%m-%d"),
-            "allowed_actions": actions, "stores": [s.lower() for s in limits.stores],
+            "actions": actions, "stores": [s.lower() for s in limits.stores],
             "excluded_categories": ["clearance", "gift_cards"] if limits.skip_clearance_and_gift_cards else [],
-            "min_net_savings": limits.min_net_savings, "ask_first_above": limits.ask_first_above,
-            "max_rebuy_price_usd": limits.max_rebuy_price_usd, "monthly_cap": limits.monthly_cap,
-            "buffer_days": 2, "max_claims_per_order": 1, "max_followups": 3}
+            "min_net_savings_usd": limits.min_net_savings_usd, "ask_first_above_usd": limits.ask_first_above_usd,
+            "max_rebuy_price_usd": limits.max_rebuy_price_usd, "monthly_cap_usd": limits.monthly_cap_usd,
+            "buffer_days": 2, "max_claims_per_order": 1, "max_followups_per_thread": 3}
     text = signer.sign(body)
     db.execute("INSERT INTO pacts (pact_id, version, user_id, pact_text, created_at, status) VALUES (%s,%s,%s,%s,%s,'active')",
                (pact_id, version, uid, text, now.strftime(FMT)))
@@ -124,7 +124,13 @@ def list_approvals(request: Request):
 
 
 def _actor(p: dict, decision):
-    """B's actors. Assumed importable as backend.actor.<name> with the section 3.4 signatures."""
+    """B's actions. Prefers B's run_action (backend.agent.api) so every action type behaves exactly as in the
+    propose loop; falls back to backend.actor.<name> (the 3.4 signatures) while B's module isn't there."""
+    try:
+        from backend.agent.api import run_action
+        return lambda: run_action(decision, p)
+    except ImportError:
+        pass
     from backend import actor
     t = p["action_type"]
     if t == "rebuy_return":

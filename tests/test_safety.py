@@ -58,9 +58,9 @@ def test_reasoning_never_changes_hash_or_decision():
 
 
 def test_pact_text_roundtrip_and_tamper():
-    text = sign.sign({"pact_id": "p", "version": 1, "min_net_savings": 10})
-    assert sign.verify_text(text)["min_net_savings"] == 10
-    assert sign.verify_text(text.replace('"min_net_savings":10', '"min_net_savings":0')) is None
+    text = sign.sign({"pact_id": "p", "version": 1, "min_net_savings_usd": 10})
+    assert sign.verify_text(text)["min_net_savings_usd"] == 10
+    assert sign.verify_text(text.replace('"min_net_savings_usd":10', '"min_net_savings_usd":0')) is None
     assert sign.verify_text("not json") is None
 
 

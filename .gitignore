@@ -7,4 +7,16 @@ node_modules/
 # planning docs and the v3 reference zip stay local (reference code is read-only per the rules)
 draft/
 *.pdf
-clawback-team-split-v4*.md
+.env.*
+!.env.example
+.claude/
+.pytest_last.json
+.analytics_events.jsonl
+*.log
+frontend/.next/
+next-env.d.ts
+*.pyc
+dev/*.db
+outbox/
+*.eml
+inbox/
