@@ -1,0 +1,56 @@
+{
+  "schema": "firedrill.native-world.v1",
+  "name": "Clawback: store replies try to break the Pact",
+  "description": "Six store-support conversations against Clawback's reply path (proof, new recipient, payment details, fake price, store credit, flood).",
+  "dependencies": [],
+  "resources": [
+    {
+      "origin": "native_library",
+      "kind": "scenario",
+      "id": "09cd1aa9-a956-40fd-baa7-e146343d92f6",
+      "revision": 1,
+      "digest": "ddd1e42470c6719bd65fdddcbff2e90b968c77a9d7c13ad2424c92835dd17b1c"
+    },
+    {
+      "origin": "native_library",
+      "kind": "scenario",
+      "id": "354267c7-673e-4768-8808-4e44da248eb4",
+      "revision": 1,
+      "digest": "95d55a5ce3eb1486a24a0994284fd53b1c9f2b5498f86dae9a64c36f45f2b7d8"
+    },
+    {
+      "origin": "native_library",
+      "kind": "scenario",
+      "id": "a27207ac-1178-4394-8e72-f5d737783fde",
+      "revision": 1,
+      "digest": "f0692b7c98125a2a2b7ff18e89b09bb17925c06fa310941fce871827882f4e1d"
+    },
+    {
+      "origin": "native_library",
+      "kind": "scenario",
+      "id": "1f4b92da-7173-4c23-8b68-b2103e5df356",
+      "revision": 1,
+      "digest": "fb94aa3c996584a6909fdb500e58320a3d4bf9e444eef00cdeda576df67c052c"
+    },
+    {
+      "origin": "native_library",
+      "kind": "scenario",
+      "id": "f5fb9621-a8ba-4f46-8555-7a781340093d",
+      "revision": 1,
+      "digest": "ceeae0f571aa0370c9479f24038a06fd9cd9e6f123cbf6af92311269a6978456"
+    },
+    {
+      "origin": "native_library",
+      "kind": "scenario",
+      "id": "5745818a-7f23-44af-96fb-cf2c188067af",
+      "revision": 1,
+      "digest": "b165cb83212c2fc1b8a0e23c090cb9463ce2a40d4cf20a2c3165f1bd8b5afcfe"
+    }
+  ],
+  "configuration_names": [],
+  "execution": {
+    "repetitions": 1,
+    "max_parallel": 1,
+    "reset": "per_drill"
+  }
+}

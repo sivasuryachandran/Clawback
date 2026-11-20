@@ -21,3 +21,4 @@ outbox/
 *.eml
 !seed/receipts/*.eml
 inbox/
+dev/firedrill/out/
