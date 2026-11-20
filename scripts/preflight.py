@@ -37,13 +37,13 @@ def get(path):
 print(f"\nClawback preflight  ({API})\n")
 
 print("Environment (names only; values are never printed)")
-needed = ["SINGLESTORE_URL", "SENSO_API_KEY", "AIRBYTE_CLIENT_ID", "AIRBYTE_CLIENT_SECRET", "AIRBYTE_WORKSPACE_NAME",
+needed = ["SINGLESTORE_URL", "SENSO_API_KEY", "AIRBYTE_CORE_DEST",
           "PERSONA_API_KEY", "PERSONA_TEMPLATE_ID", "PERSONA_WEBHOOK_SECRET", "SIE_URL", "SIE_API_KEY",
           "ARCEE_API_KEY", "LLM_API_KEY", "AMPLITUDE_API_KEY", "MOCK_WEBHOOK_SECRET", "DEMO_SUPPORT_INBOX",
           "DEMO_ALLOWED_RECIPIENTS", "PACT_SIGNING_KEY"]
 for k in needed:
     v = os.environ.get(k, "").strip()
-    soft_only = k in ("AMPLITUDE_API_KEY", "ARCEE_API_KEY", "SIE_API_KEY", "SIE_URL")   # cut-list items have fallbacks
+    soft_only = k in ("AMPLITUDE_API_KEY", "ARCEE_API_KEY", "SIE_API_KEY", "SIE_URL", "AIRBYTE_CORE_DEST")   # cut-list items have fallbacks
     row(bool(v), k, "set" if v else "NOT SET", hard=not soft_only)
 row(len(os.environ.get("PACT_SIGNING_KEY", "")) >= 32, "PACT_SIGNING_KEY is 32+ characters", hard=True)
 
