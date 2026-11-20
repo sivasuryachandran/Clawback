@@ -19,6 +19,9 @@ os.environ.setdefault("DEMO_USER_EMAIL", "demo-user@clawback.test")
 os.environ.setdefault("DEMO_ALLOWED_RECIPIENTS",
                       f"{os.environ['DEMO_SUPPORT_INBOX']},{os.environ['DEMO_USER_EMAIL']}")
 os.environ.setdefault("OUTBOX_DIR", "outbox")
+# run_demo RESETS its database. Never let that be A's real one (dev/clawback.db, or whatever a
+# teammate's .env points CLAWBACK_DB at): always use a throwaway file of its own.
+os.environ["CLAWBACK_DB"] = os.path.join("dev", "run_demo.db")
 os.environ.pop("LLM_API_KEY", None) if "--llm" not in sys.argv else None
 
 from fastapi.testclient import TestClient  # noqa: E402
