@@ -70,26 +70,68 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
 - Tool input: iterate `resp.content` for `block.type == "tool_use"` and read `block.input`
   (already a dict). Never string-match the raw JSON.
 
-### Senso: NOT contacted (local only). Checklist for the event
-- The `@senso-ai/cli` npm package is **not installed** on this machine. Install it and
-  `senso login` first thing; indexing may be slow.
-- Look up and write down: the ingest command/endpoint for a markdown doc and the doc id it
-  returns (→ `store_policies.senso_doc_id`); the search/answer call, and whether the response
-  includes the **source chunk text**, a source URL/title, a content id and a **revision/version**;
-  the auth header; the base URL (`SENSO_BASE_URL`); rate limits; time to index; time to
-  re-index after an edit.
-- Mapping already built: `SensoPolicySource.ask()` → `{answer, cited_text, source_url,
-  source_id, revision}`. No source chunk → return no citation (the gate stops on R6). Never
-  build a quote from the answer text.
-- Local stand-in: `LocalPolicySource` quotes the best-matching sentence of
-  `seed/policies/<store>.md`. Its revision is a sha256 of the file.
+### Senso: docs read 2026-11-20 (docs.senso.ai), client built, NOT run live (no key)
+- **Auth/base:** header `X-API-Key: tgr_...`; base `https://apiv2.senso.ai/api/v1`. Keys are
+  org-scoped; `senso login` stores a 7-day CLI key. Errors: 401 bad key, 402 out of credits
+  (uploads AND searches cost credits), 403, 404, **409 duplicate text**.
+- **CLI:** `npm install -g @senso-ai/cli` (**Node.js >= 22.12**), `senso login`, `senso whoami`,
+  global `--output json`. Search: `senso search "<q>"` (answer + passages), `search context`
+  (passages only), `search content`, `search full`, `search stream`; `--max-results` (max 20,
+  default 5); **`--content-ids <ids...>` + `--require-scoped-ids`** restricts search to given
+  documents (CLI only; no HTTP field for it in the docs).
+- **Upload: `.md` files are REFUSED** (file upload returns 422). Send text instead:
+  `POST /org/kb/raw {title, text}` returns **202** `{id, kb_node_id, processing_status}`; CLI
+  `senso kb create-raw --data '{"title": "...", "text": "..."}'`. Keep `kb_node_id`.
+- **Status:** `GET /org/kb/nodes/{kb_node_id}` returns `content.processing_status`, one of
+  pending | processing | complete | failed (+ `error_code`). Docs: poll every 5 s; a short doc is
+  "usually ready within a few seconds". No SLA. `kb sync-status` is NOT the ingest signal.
+- **Search:** `POST /org/search {query}` returns `answer` (markdown) + `results[]` {content_id,
+  title, chunk_text, score, rank}. `POST /org/search/context {query}` returns `results[]`
+  {content_chunk_id, content_id, kb_node_id, **version_id**, chunk_index, **chunk_text**, score,
+  rank, title, ...}. `content_id` = the `id` from upload. No URL field: we keep content_id ->
+  source URL ourselves.
+- **Update (live edit):** `senso kb update-raw <id> --data '{"title": "...", "text": "..."}'`
+  makes "a new version" (also `patch-raw`); old versions: `senso kb get-content <id> --rev <n>`.
+  No HTTP path for update or delete in the docs. Delete: `senso kb delete <id>`.
+- **Rate limits:** none stated for search/upload (only `/org/competitors/suggest`, 5 per hour).
+- **What we built:** `SensoPolicySource` (HTTP `/org/search/context`; accepts ONLY results
+  whose content_id is registered to the asked store; quotes the best sentence inside Senso's
+  chunk; revision = version_id) and `dev/senso_ingest.py` (one raw doc per `Source:` page; polls
+  the status; records `indexed_s`; writes `seed/policies/senso_ids.json`). Offline tests use a
+  fake Senso server.
+- **Design catch:** search is org-wide. Without our content_id filter, a Target question could
+  be answered with a Best Buy chunk and still pass R6. The filter turns that into "no citation".
 
-### Airbyte Gmail send: NOT contacted
-- `AirbyteGmailTransport` is a clearly marked stub. At the event, check whether the Gmail
-  agent connector exposes a **send** action at all (agent connectors are often read-only),
-  the action/entity names, the hosted-mode auth, and whether it returns a Gmail `threadId`
-  (needed so follow-ups land in the same thread, R13). If it can't send, use
-  `GmailApiTransport` (users.messages.send with threadId). Not built yet.
+### Airbyte Gmail: docs read 2026-11-20, transport built, NOT run live (no credentials)
+- docs.airbyte.com `/ai-agents/...` pages now redirect to the homepage. The real docs are in
+  github.com/airbytehq/airbyte-agent-connectors (`connectors/gmail/REFERENCE.md`, `AUTH.md`)
+  and on PyPI.
+- **Package:** `airbyte-agent-gmail` **0.1.31** (Apr 9, 2026), connector 0.1.4, Elastic-2.0
+  license, **requires Python >= 3.13** (team spec says 3.11: decide at kickoff).
+  `airbyte-agent-sdk` provides `connect("gmail", workspace_name=...)`, which reads
+  AIRBYTE_CLIENT_ID / AIRBYTE_CLIENT_SECRET (matches our env vars).
+- **Send works:** entity **messages**, action **create**, params `raw` (base64url RFC 2822:
+  headers + blank line + body) and optional `threadId` (reply in a conversation); it returns
+  `id` and `threadId`. SDK: `await gmail.messages.create(raw=..., thread_id=...)`. CLI:
+  `airbyte-agent connectors execute --json` with workspace, name gmail, entity messages,
+  action create, params. There's also Drafts Send: Create.
+- **Read works:** `messages.list` (q = Gmail search, maxResults 1-500, pageToken) returns ids +
+  threadIds; `messages.get` (messageId, format full|metadata|minimal|raw) returns the payload
+  (headers, body); `threads.get` (threadId) returns all messages in the conversation.
+- **Setup (a human, once):** `airbyte-agent login`, then `airbyte-agent connectors create` with
+  the workspace and name gmail. It opens the hosted Google OAuth flow. Multi-org: set
+  `organization_id` or run `airbyte-agent organizations use`.
+- **Can't:** attach files, forward, create filters, change settings.
+- **What we built:** `AirbyteGmailTransport` (base64url raw; our own `thr_...` ids mean "new
+  thread"; Gmail's returned threadId is stored, so follow-ups reply in the real thread). An
+  offline test uses a fake connector: claim -> new thread, proof -> same threadId, injection ->
+  never reaches Gmail. Preflight checks the env vars, Python >= 3.13 and that the SDK is installed.
+- **Never** register the connector's tools with the LLM (the docs' `build_connector_tools`
+  pattern): only `send_email`, behind its walls, may call `execute`.
+- **Still to do for real replies:** a GmailInboxReader using messages.list(q="in:inbox
+  newer_than:2d") + messages.get, deduped on the Gmail message id. Not built. Also check that the
+  recipient's mail client threads replies with only threadId; real mail usually also wants
+  In-Reply-To / References headers and the same subject (we keep "Re: ...").
 
 ### Firedrill: API NOT run
 - F1–F10 weren't defined in either team doc; B drafted them (`dev/firedrill_local.py`, 10/10
@@ -287,10 +329,12 @@ Consequences:
 
 ## Tomorrow's checklist (B)
 
-- [ ] Install `@senso-ai/cli`, log in, ingest the three docs **first thing**, and time the indexing.
+- [ ] Senso: key in .env -> `python -m dev.senso_ingest` **first thing** (prints the indexing time
+      per doc) -> `python -m dev.senso_smoke` -> preflight `--warm`.
 - [ ] Paste official Target and Best Buy text and URLs into `seed/policies/*.md` (verbatim), and
       give A the structured values.
-- [ ] Check whether the Airbyte Gmail connector can send; if not, build GmailApiTransport.
+- [ ] Airbyte Gmail: `airbyte-agent login` + `connectors create` (OAuth), Python 3.13 venv,
+      `pip install airbyte-agent-sdk`, EMAIL_TRANSPORT=airbyte, send ONE test claim to the support inbox.
 - [ ] `pip install anthropic`, set `LLM_API_KEY`, run `python -m dev.llm_live_check` (skipped on
       rehearsal night: no key). It flags provider failures instead of silently falling back.
 - [ ] Agree with Siva on: the re-exports in `backend/pact/__init__.py`, `record_result`, the clock,

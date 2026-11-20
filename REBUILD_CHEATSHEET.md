@@ -31,6 +31,17 @@
 - A: does `db.execute` return lastrowid for INSERT? Mock store `support_domains` is `[]`, so live mode fails R10. Confirm the real-store policy values.
 - C: `/mock/support` should show the plain sentence, not JSON. `/mock/policy` must exist (it's the Why? source link).
 
+## Sponsor calls (from the docs, 2026-11-20; never run live)
+
+- **Senso:** `X-API-Key`, `https://apiv2.senso.ai/api/v1`.
+  - Upload: `POST /org/kb/raw {title,text}` (**.md files are refused**). Poll `GET /org/kb/nodes/{kb_node_id}` until `content.processing_status == complete`.
+  - Search: `POST /org/search/context {query}` returns chunk_text + content_id + version_id. Search is **org-wide**, so filter the results by the store's content_id.
+  - Live edit: `senso kb update-raw <id>`.
+- **Airbyte Gmail:** `connect("gmail", workspace_name=...)`, then `execute("messages","create",{"raw": b64url(RFC 2822), "threadId"?})`, which returns id + threadId.
+  - The package needs **Python >= 3.13**.
+  - One-time OAuth setup: `airbyte-agent login` + `airbyte-agent connectors create`.
+  - Never give the connector's tools to the LLM.
+
 ## Real-store facts (bestbuy.com / target.com, read 2026-11-19)
 
 - **Best Buy:** chat; own price drops matched during the return period; standard return 15 days from receipt; holiday purchases (Oct 30 – Dec 31) run through Jan 15, 2027; competitors only at the time of sale; clearance excluded.

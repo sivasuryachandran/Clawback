@@ -6,3 +6,4 @@ python-dotenv>=1.0
 pytest>=8
 anthropic>=0.40        # only needed when LLM_API_KEY is set
 singlestoredb>=1.0     # only needed when SINGLESTORE_URL is set
+# airbyte-agent-sdk   # only for EMAIL_TRANSPORT=airbyte; needs Python >= 3.13 (use a 3.13 venv)

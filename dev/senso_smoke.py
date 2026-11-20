@@ -19,10 +19,7 @@ def main():
     src = get_policy_source()
     print(f"policy source: {type(src).__name__}")
     if isinstance(src, SensoPolicySource):
-        for store in ("mockstore", "target", "bestbuy"):
-            t = time.time()
-            doc_id = src.ingest(store, f"seed/policies/{store}.md")
-            print(f"ingested {store}: {doc_id} ({time.time() - t:.1f}s)")
+        print("(Senso: upload first with `python -m dev.senso_ingest`; this only searches)")
     else:
         print("(SENSO_API_KEY unset: no upload; quoting seed/policies/*.md locally)")
     for store, q in QUESTIONS:

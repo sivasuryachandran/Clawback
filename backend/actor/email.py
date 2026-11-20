@@ -70,14 +70,51 @@ class FileTransport:
 
 
 class AirbyteGmailTransport:
-    """Airbyte Gmail agent connector, hosted mode (AIRBYTE_CLIENT_ID / _SECRET / _WORKSPACE_NAME).
-    NOT WIRED TONIGHT (rehearsal ran fully local). At the event, check the connector docs for:
-    whether it exposes a SEND action at all (agent connectors are often read-only), the entity
-    and action names, the auth flow in hosted mode, and whether it returns a Gmail threadId so
-    replies stay in one thread. If it can't send, use GmailApiTransport instead."""
+    """Airbyte Gmail agent connector, hosted mode. Built from the connector's REFERENCE.md and
+    AUTH.md (github.com/airbytehq/airbyte-agent-connectors, read 2026-11-20). NOT RUN live yet.
+
+    Documented call:  execute("messages", "create", {"raw": <base64url RFC 2822>, "threadId"?})
+      -> record with id and threadId.   (Python SDK: gmail.messages.create(raw=, thread_id=))
+    Setup (once, by a human): `airbyte-agent login`, then
+      `airbyte-agent connectors create --json '{"workspace": "<ws>", "name": "gmail"}'`
+      which opens the hosted Google OAuth flow. Then in code:
+      `from airbyte_agent_sdk import connect; connect("gmail", workspace_name=...)`, which reads
+      AIRBYTE_CLIENT_ID / AIRBYTE_CLIENT_SECRET from the environment.
+    Gotchas: airbyte-agent-gmail 0.1.31 requires Python >= 3.13 (team spec says 3.11); the
+    connector can't attach files or forward. NEVER hand the connector's tools to the LLM
+    (build_connector_tools): only send_email, behind its walls, may call execute().
+
+    Thread ids: ours look like "thr_..." for a brand-new conversation; Gmail must not get those,
+    so they mean "new thread" and Gmail's returned threadId is what send_email stores.
+    """
+
+    def __init__(self, connector=None):
+        self._connector = connector  # tests pass a fake with an async execute()
+
+    def _conn(self):
+        if self._connector is None:
+            from airbyte_agent_sdk import connect  # lazy: Python >= 3.13 package
+            self._connector = connect("gmail", workspace_name=os.environ["AIRBYTE_WORKSPACE_NAME"])
+        return self._connector
 
     def send(self, to, subject, body, thread_id):
-        raise NotImplementedError("Airbyte Gmail send not wired: see class docstring")
+        import asyncio
+        import base64
+        m = EmailMessage()
+        m["To"], m["Subject"] = to, subject
+        m.set_content(body)
+        raw = base64.urlsafe_b64encode(bytes(m)).decode("ascii")
+        params = {"raw": raw}
+        if thread_id and not thread_id.startswith("thr_"):
+            params["threadId"] = thread_id  # a real Gmail thread: reply in it
+        res = asyncio.run(self._conn().execute("messages", "create", params))
+        rec = res if isinstance(res, dict) else getattr(res, "data", None) or {}
+        if isinstance(rec, list):
+            rec = rec[0] if rec else {}
+        msg_id, gmail_thread = rec.get("id"), rec.get("threadId")
+        if not msg_id:
+            raise RuntimeError(f"Airbyte Gmail send returned no message id: {str(res)[:200]}")
+        return msg_id, gmail_thread or thread_id
 
 
 class GmailApiTransport:

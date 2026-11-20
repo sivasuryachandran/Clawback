@@ -69,6 +69,21 @@ def run_checks(http=None, live: bool = False, warm: bool = False) -> list[tuple[
             add(OK, "email transport", f"file -> {folder}/")
         except Exception as e:
             add(FAIL, "email transport", f"outbox not writable: {e!r}")
+    elif kind == "airbyte":
+        missing = [k for k in ("AIRBYTE_CLIENT_ID", "AIRBYTE_CLIENT_SECRET", "AIRBYTE_WORKSPACE_NAME")
+                   if not os.environ.get(k)]
+        if missing:
+            add(FAIL, "email transport", f"airbyte: missing {', '.join(missing)}")
+        elif sys.version_info < (3, 13):
+            add(FAIL, "email transport", f"airbyte: the connector needs Python >= 3.13, this is "
+                                         f"{sys.version_info.major}.{sys.version_info.minor}")
+        else:
+            try:
+                import airbyte_agent_sdk  # noqa: F401
+                add(WARN, "email transport", "airbyte: configured; never sent live yet (send one test "
+                                             "email to the support inbox first)")
+            except ImportError:
+                add(FAIL, "email transport", "airbyte: pip install airbyte-agent-sdk")
     else:
         add(FAIL, "email transport", f"{kind}: not wired in the rehearsal build")
 

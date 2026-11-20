@@ -92,27 +92,74 @@ class LocalPolicySource:
 
 
 class SensoPolicySource:
-    """Real Senso. NOT WIRED TONIGHT (rehearsal ran fully local, no Senso docs fetched).
+    """Real Senso, built from docs.senso.ai (read 2026-11-20; see REHEARSAL_NOTES.md).
+    NOT RUN against the live API yet (no key on rehearsal night).
 
-    To finish at the event, check Senso's current docs for:
-      1. how to ingest a markdown/text document (CLI `@senso-ai/cli` command or HTTP endpoint),
-         and whether it returns a document id we can store as store_policies.senso_doc_id;
-      2. the search/answer call: request shape, and whether the response includes the
-         source chunk text, source URL/title, a source/content id and a version or revision;
-      3. auth header name for SENSO_API_KEY, base URL, rate limits, indexing delay.
-    Map the response to {answer, cited_text, source_url, source_id, revision}. If the response
-    has no source chunk, return _no_source(...) so the gate stops on R6. Never synthesize a quote.
+    Documented calls used:
+      POST {base}/org/kb/raw            {title, text} -> 202 {id, kb_node_id, processing_status}
+                                         409 if the same text already exists
+      GET  {base}/org/kb/nodes/{kb_node_id} -> content.processing_status: pending|processing|complete|failed
+      POST {base}/org/search/context    {query} -> results[]: content_id, version_id, chunk_text, score, ...
+    Auth header X-API-Key; base https://apiv2.senso.ai/api/v1 (env SENSO_BASE_URL overrides).
+
+    Search is org-wide: the HTTP docs show no way to scope it to one document (the CLI has
+    --content-ids + --require-scoped-ids). So we keep our own map content_id -> (store, source
+    URL) in seed/policies/senso_ids.json (written by dev/senso_ingest.py) and ONLY accept a
+    result whose content_id belongs to the asked store. Anything else -> no citation -> R6.
+    The quote is the best sentence INSIDE Senso's chunk_text (exact text, never synthesized);
+    revision = Senso's version_id.
     """
 
-    def __init__(self, api_key: str, base_url: str | None = None):
-        self.api_key = api_key
-        self.base_url = base_url or os.environ.get("SENSO_BASE_URL")
+    DEFAULT_BASE = "https://apiv2.senso.ai/api/v1"
 
-    def ingest(self, store: str, path: str) -> str:
-        raise NotImplementedError("Senso ingest not wired: check Senso docs (see class docstring)")
+    def __init__(self, api_key: str, base_url: str | None = None, http=None,
+                 ids_path: str | None = None):
+        import httpx
+        self.base_url = (base_url or os.environ.get("SENSO_BASE_URL") or self.DEFAULT_BASE).rstrip("/")
+        self.http = http or httpx.Client(timeout=float(os.environ.get("POLICY_TIMEOUT_S", "10")))
+        self.headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+        self.ids_path = Path(ids_path or os.environ.get("SENSO_IDS", "seed/policies/senso_ids.json"))
+
+    # --- ingest side (dev/senso_ingest.py) ---
+    def create_raw(self, title: str, text: str) -> dict:
+        r = self.http.post(f"{self.base_url}/org/kb/raw", headers=self.headers,
+                           json={"title": title, "text": text})
+        if r.status_code == 409:
+            raise FileExistsError("Senso 409: this exact text is already in the knowledge base")
+        r.raise_for_status()
+        return r.json()
+
+    def status(self, kb_node_id: str) -> str:
+        r = self.http.get(f"{self.base_url}/org/kb/nodes/{kb_node_id}", headers=self.headers)
+        r.raise_for_status()
+        return ((r.json().get("content") or {}).get("processing_status")) or "unknown"
+
+    # --- query side ---
+    def _ids(self) -> dict:
+        import json
+        return json.loads(self.ids_path.read_text(encoding="utf-8")) if self.ids_path.exists() else {}
 
     def ask(self, store: str, question: str) -> dict:
-        raise NotImplementedError("Senso search not wired: check Senso docs (see class docstring)")
+        ids = {cid: v for cid, v in self._ids().items() if v.get("store") == store}
+        if not ids:
+            return _no_source(f"No Senso document registered for {store} (run dev/senso_ingest.py).")
+        r = self.http.post(f"{self.base_url}/org/search/context", headers=self.headers,
+                           json={"query": question})
+        r.raise_for_status()
+        results = [x for x in (r.json().get("results") or [])
+                   if x.get("content_id") in ids and (x.get("chunk_text") or "").strip()]
+        if not results:
+            return _no_source(f"Senso returned no passage from {store}'s policy.")
+        best = max(results, key=lambda x: x.get("score") or 0)
+        drop = {w.lower() for w in STORE_NAMES.get(store, store).split()}
+        q = _stems(question, drop)
+        sentences = [s.strip(" -*") for ln in best["chunk_text"].splitlines()
+                     for s in re.split(r"(?<=[.!?])\s+", ln) if s.strip(" -*")]
+        quote = max(sentences, key=lambda s: len(q & _stems(s, drop))) if sentences else best["chunk_text"]
+        meta = ids[best["content_id"]]
+        return {"answer": quote, "cited_text": quote, "source_url": meta.get("source_url"),
+                "source_id": f"senso:{best['content_id']}",
+                "revision": best.get("version_id")}
 
 
 _override: PolicySource | None = None
