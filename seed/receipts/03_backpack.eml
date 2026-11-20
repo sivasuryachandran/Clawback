@@ -1,0 +1,15 @@
+From: orders@mockstore.example
+To: u_demo@example.com
+Subject: Your Mock Store order MS-55041 has shipped
+Date: Thu, 12 Nov 2026 14:15:00 -0800
+Content-Type: text/plain; charset=utf-8
+
+Thanks for your order!
+
+Store: mockstore
+Order: MS-55041
+OrderDate: 2026-11-12
+DeliveryDate: 2026-11-14
+ITEM|title=Trailhead Backpack|sku=MS-3003|upc=850001000035|model=TRL-BP3|variant=Black|category=outdoor|price=89.00|qty=1
+
+We'll email you when it ships.

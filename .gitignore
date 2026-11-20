@@ -18,4 +18,5 @@ next-env.d.ts
 dev/*.db
 outbox/
 *.eml
+!seed/receipts/*.eml
 inbox/

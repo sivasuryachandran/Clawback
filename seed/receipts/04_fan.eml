@@ -1,0 +1,15 @@
+From: orders@mockstore.example
+To: u_demo@example.com
+Subject: Your Mock Store order MS-55029 has shipped
+Date: Tue, 10 Nov 2026 11:45:00 -0800
+Content-Type: text/plain; charset=utf-8
+
+Thanks for your order!
+
+Store: mockstore
+Order: MS-55029
+OrderDate: 2026-11-10
+DeliveryDate: 2026-11-12
+ITEM|title=Breeze Desk Fan|sku=MS-4004|upc=850001000059|model=BRZ-FAN4|variant=Gray|category=clearance|price=59.00|qty=1
+
+Clearance items are final sale.
