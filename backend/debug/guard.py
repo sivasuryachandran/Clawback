@@ -1,9 +1,9 @@
 """Localhost-only controls (Teammate C).
 
-The runbook has you tunnel the frontend (port 3000) so a phone can approve the lamp, and Next.js proxies
-/backend/* to this API. That would also expose the demo controls and the engine room to anyone who gets the
-tunnel URL: the Mock Store admin (change prices, reset), and Under the hood (allowed recipients, messages,
-Pact details). This guard serves those paths ONLY to requests that really come from the demo laptop.
+If the API is ever reachable through a tunnel (the demo is PC only, but a phone is optional), the demo controls and the
+engine room would be open to anyone who gets the URL: the Mock Store admin (change prices, reset), and Under the hood
+(allowed recipients, messages, Pact details). This guard serves those paths ONLY to requests that really come from the
+demo laptop.
 
 Public as before (never blocked): the Mock Store storefront, policy, support box, listings, orders and
 rebuy_return; /voice/ask; /stats; /health; and every other teammate's endpoint.

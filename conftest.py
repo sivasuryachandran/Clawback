@@ -10,6 +10,10 @@ import time
 
 import pytest
 
+# backend/main.py calls load_dotenv(). A developer's real .env (blank allow-list, a fixed CLAWBACK_TODAY ...) must never change what the
+# tests see, in this process or in the app subprocesses the end-to-end tests start (they inherit this variable).
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+
 _started = {"t": None}
 
 
@@ -44,9 +48,11 @@ def _isolate_analytics(tmp_path, monkeypatch):
     """No test, ours or a teammate's, may write to the repo's real analytics log or start with another test's events."""
     monkeypatch.setenv("ANALYTICS_LOG", str(tmp_path / "analytics_events.jsonl"))
     try:
-        from backend.analytics import events
+        from backend.analytics import events, recovery
         events.reset_for_tests()
+        recovery.reset_for_tests()
         yield
         events.reset_for_tests()
+        recovery.reset_for_tests()
     except ImportError:          # backend not importable in this run: nothing to isolate
         yield

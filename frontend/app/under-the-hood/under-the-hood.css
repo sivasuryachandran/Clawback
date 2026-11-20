@@ -1,8 +1,8 @@
 /* Under the hood (Teammate C): for judges. Light, monospace values, one accent. Self-contained. */
 .uh { --uh-accent: var(--accent, #4f46e5); --uh-ink: #101828; --uh-mute: #667085; --uh-line: #e4e7ec; --uh-bg: #f9fafb;
   --uh-ok: #067647; --uh-ok-bg: #ecfdf3; --uh-ask: #b54708; --uh-ask-bg: #fffaeb; --uh-stop: #475467; --uh-stop-bg: #f2f4f7; --uh-bad: #b42318; --uh-bad-bg: #fef3f2;
-  background: #fff; color: var(--uh-ink); min-height: 100vh; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.uh * { box-sizing: border-box; }
+  margin: 0; background: #fff; color: var(--uh-ink); min-height: 100vh; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.uh, .uh * { box-sizing: border-box; }
 .uh-wrap { max-width: 1120px; margin: 0 auto; padding: 24px 20px 64px; }
 .uh-top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
 .uh h1 { font-size: 30px; margin: 4px 0; letter-spacing: -.02em; }
@@ -37,6 +37,9 @@
 .uh tr:last-child td { border-bottom: 0; }
 .uh-mono, .uh pre, .uh td.m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
 .uh td.m { word-break: break-all; }
+.uh td.t { white-space: nowrap; word-break: normal; }   /* times and dates never wrap, even in a wide table */
+.uh td { min-width: 3.2em; }
+.uh td.w { min-width: 15em; }
 .uh pre { margin: 8px 0 0; padding: 12px; background: var(--uh-bg); border: 1px solid var(--uh-line); border-radius: 10px; overflow: auto; max-height: 320px; white-space: pre-wrap; word-break: break-word; }
 
 .uh-pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .02em; font-family: ui-monospace, Menlo, monospace; }

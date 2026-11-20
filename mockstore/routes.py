@@ -197,8 +197,8 @@ async def api_support(body: SupportIn, request: Request, bg: BackgroundTasks):
         raise HTTPException(422, "Message is empty")
     if not support.allow_message():     # every message costs an LLM call and maybe an email: don't let a loop run away
         raise HTTPException(429, "You're sending messages too fast. Please wait a moment.")
-    thread = support.find_claim_thread()
-    bg.add_task(support.forward, request.app, text, thread)   # the reply handler may be slow (LLM + email)
+    conv = support.resolve_conversation()
+    bg.add_task(support.forward, request.app, text, conv)   # the reply handler may be slow (LLM + email)
     return {"accepted": True}
 
 

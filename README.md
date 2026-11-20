@@ -67,44 +67,57 @@ clearance and gift cards · only if I save at least $10 · ask me first above $1
 
 | Threat | What stops it |
 |---|---|
-| Prompt injection in a receipt or a support reply | Recipients and facts come from the database and the Pact, never from model text; follow-ups to any other address stop on R13 |
+| Prompt injection in a receipt or a support reply | Recipients and facts come from the database and the Pact, never from model text; follow-ups to any other address stop on R10 / R13 |
 | A "cheaper" listing that is not the same item | R5 (SKU + variant, or UPC/model number across stores) |
 | Spending beyond the user's limits | R9 counts running and approved-but-not-run rebuys; R12 asks above the ask-first limit |
 | Double click / retry | `executed_actions` is keyed by proposal hash; a failed action can be retried once |
 | Editing the Pact in the database | R1 recomputes hash + HMAC on every decision; Under the hood shows ✓/✗ live |
 | Emailing a real retailer | Three layers (agent, gate R10, sender) refuse unknown recipients; Target and Best Buy get a claim packet emailed to the user |
 | A stale approval | A1 binds to the exact proposal hash, expiry, owner and a fresh Persona re-check |
+| The sphere's voice approving money | `/voice/ask` is a fixed list of intents; it explains and pauses, and refuses approve / buy / send / edit limits / un-pause |
 
 ## Where each sponsor shows
 
+We focus on five sponsors. A row is only a claim once that sponsor has run live in the recorded demo (see "Real vs simulated").
+
 | Sponsor | Where a judge sees it |
 |---|---|
-| Senso | The store's policy quoted in every Why? panel; Under the hood → Policy |
-| Persona | Verify before signing; fresh re-check when approving money; messages name the verified user |
-| SingleStore | All data; vector match; Under the hood → Live queries ("what the Pact stopped this week") |
-| Airbyte | Gmail connector reads receipts and sends the mock-store claim email; Under the hood → Ingest |
-| Superlinked (SIE) | Embeddings and rerank scores; Under the hood → Matching |
-| Amplitude | Dashboard: dollars recovered, decision mix, stop reasons |
+| Amplitude | Dashboard: dollars recovered, decision mix (Done / Needs your OK / Stopped), stop reasons by rule |
+| SingleStore | All data; Under the hood → Live queries ("what the Pact stopped this week") |
+| Persona | Verify before signing; fresh re-check when approving money |
 | Arcee | Receipt parsing; cost per receipt on Under the hood → Ingest |
-| Firedrill | Adversarial scenarios with a true pass rate *(if it shipped)* |
-| Guild | The "Stopped by your rules" moment, and asking the orb "why did you stop the backpack?" |
+| Senso | The store's policy quoted in every Why? panel; Under the hood → Policy |
 
 ## Run it
 
-Python 3.11 or 3.12+ and Node 20+. (`sie-sdk` needs 3.12+, so `requirements.txt` installs it only there; on 3.11 Teammate A uses SIE's HTTP embeddings endpoint.)
+Python 3.11 or 3.12+. No Node and no build step: the UI is static files. (`sie-sdk` needs 3.12+, so `requirements.txt` installs it only there; on 3.11 Teammate A uses SIE's HTTP embeddings endpoint.)
 
 ```bash
 cp .env.example .env            # fill in the keys; .env is gitignored
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8000      # API, Mock Store at /mock, Under the hood data
-cd frontend && npm install && npm run dev          # http://localhost:3000
+
+# Everything that exists today, on one port (until A's database lands; then use backend.main:app).
+# Use any free port and keep the three URLs equal to it (8000 was taken on one laptop, so 8001 here).
+export CLAWBACK_API_BASE=http://localhost:8001 CLAWBACK_BASE_URL=http://localhost:8001 BACKEND_URL=http://localhost:8001
+uvicorn backend.dev_app:app --port 8001
+python3 frontend/serve.py        # the app on http://localhost:3000   (second terminal)
 ```
 
-- App: http://localhost:3000 · Under the hood: http://localhost:3000/under-the-hood
-- Mock Store: http://localhost:8000/mock · its control panel: http://localhost:8000/mock/admin
-- Before a demo: `python scripts/preflight.py`. Demo script, stunts, tunnel and Amplitude setup: [docs/RUNBOOK.md](docs/RUNBOOK.md).
-- What the other teammates code against (ids, order numbers, webhook format, endpoints): [docs/C_CONTRACTS.md](docs/C_CONTRACTS.md).
+- App: http://localhost:3000 · **Under the hood: http://localhost:8001/under-the-hood/** (served by the API; no second server)
+- Mock Store: http://localhost:8001/mock · its control panel: http://localhost:8001/mock/admin
+- Before a demo: `python scripts/preflight.py`. Demo script, stunts and Amplitude setup: [docs/RUNBOOK.md](docs/RUNBOOK.md).
+- What each teammate codes against (ids, order numbers, webhook format, endpoints, decisions): [docs/C_CONTRACTS.md](docs/C_CONTRACTS.md).
+
+### Layout
+
+| Folder | What |
+|---|---|
+| `backend/pact/`, `backend/persona/`, `frontend/` | Siva: the Pact, the gate, Persona, the static UI with the sphere and voice |
+| `backend/agent/`, `backend/actor/` | B: policy check, proposals, replies, claim email / packet / rebuy actors |
+| `backend/main.py`, `mockstore/` | C: the app shell that mounts every router; the simulated retailer |
+| `backend/analytics/`, `backend/debug/`, `backend/voice/` | C: analytics and `/stats`, Under the hood data, `POST /voice/ask` |
+| `frontend/app/under-the-hood/` | C: the judges' page (static) |
 
 ### Tests
 
@@ -112,14 +125,20 @@ cd frontend && npm install && npm run dev          # http://localhost:3000
 pytest -q
 ```
 
-Part C's suite alone (mock store, webhook, analytics, stats, Under the hood, voice): `351 passed`.
-`[Replace with the whole team's count once everyone's tests are merged.]`
+The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voice, and end-to-end runs of the real app. `561 passed, 1 skipped` on Python 3.11 and 3.12. `[Refresh this line at 4:00.]`
 
 ## Real vs simulated
 
-- **Real:** Gmail ingest and sending through Airbyte, SingleStore, SIE, Senso, Persona (sandbox), the gate.
-- **Simulated:** the Mock Store's prices, the store's support rep (a teammate inbox), and the Best Buy and Target prices
-  (fetched once and cached). Real stores never receive email; they get a claim packet the user submits through the store's chat.
+| | |
+|---|---|
+| **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events (`[confirm after the demo run that the dashboard shows them]`) |
+| **Real only once it has run live** | SingleStore, Persona (sandbox), Arcee and Senso. `[Tick each one after it ran live in the recording; delete any that did not.]` |
+| **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); offline vector and parser fallbacks; the in-memory stand-in database when SingleStore is not connected |
+| **Airbyte** | Claimed only if a real Gmail read or send ran live in the recording. `[Keep or delete.]` |
+| **Not claimed** | Superlinked, Firedrill and Guild are not part of this submission |
+
+The signing helpers (`backend/pact/sign.py`) and the sphere visuals (`frontend/orb.js`) were adapted from Siva's earlier Pact project.
+Real stores never receive email: they get a claim packet the user submits through the store's chat.
 
 ## Honest scope
 
@@ -128,13 +147,13 @@ price adjustments. Voice can explain and pause but can never approve, buy, send,
 
 ## Team
 
-Siva Surya Chandran · `[Teammate A]` · `[Teammate B]` · `[Teammate C]`  (`[emails]`)
+Siva Surya Chandran · Sharan Joseph · Villyalsriprajeet · `[Teammate A]`  (`[emails]`)
 
 ## Disclosure
 
 - **Prior ideas:** Clawback reuses the *Pact* idea from Siva's earlier projects **PACT** and **Second Look** (a gate that checks
-  a final order against a signed intent), rebuilt here for refunds and returns.
-- **`[EDIT BEFORE SUBMITTING, and make it exactly true]`** State what existed before the 11:00 start (for example: planning docs,
-  a design reference implementation of the gate that was read and not copied, sponsor account setup, and any scaffolding written
-  before kickoff and retyped or adapted at the event). The event rules say the project must be built during the event; confirm with
-  an organizer that this is acceptable.
+  a final order against a signed intent), rebuilt here for refunds and returns. The signing helpers (`backend/pact/sign.py`) and the
+  sphere (`frontend/orb.js`) were adapted from Siva's earlier Pact project.
+- **Before the event:** planning documents, and Teammate B's rehearsal code (see `REHEARSAL_NOTES.md`). Teammate C's platform (app shell, mock
+  store, analytics, Under the hood, voice backend) was first drafted on Nov 19 and reworked and integrated with the team's code on Nov 20.
+  `[Confirm with an organizer that this is acceptable, and edit this line to match.]`

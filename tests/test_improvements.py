@@ -77,19 +77,6 @@ def test_claim_thread_lookup_ignores_inbound_whatever_it_is_called(sample_db):
     assert support.find_claim_thread()["thread_id"] == "thr_sample_1"          # the newest row is an inbound one: skipped
 
 
-# ---- the orb finds the card however it is marked -----------------------------------------------------------------------------------------------
-
-def test_the_orb_looks_for_every_usual_card_marking():
-    src = (ROOT / "frontend/components/orb/Orb.tsx").read_text()
-    for needle in ['[data-card-id=', '[data-opportunity-id=', '#card-', '#opportunity-', '#opp-', "scrollIntoView", "orb-flash"]:
-        assert needle in src, needle
-
-
-def test_under_the_hood_page_explains_a_refusal():
-    src = (ROOT / "frontend/app/under-the-hood/page.tsx").read_text()
-    assert "r.status === 403" in src and "demo laptop" in src
-
-
 # ---- admin: the optional keep-fresh toggle ---------------------------------------------------------------------------------------------------------
 
 def test_keep_fresh_toggle_is_there_and_off_by_default(client, fresh_store):

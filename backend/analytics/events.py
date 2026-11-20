@@ -119,11 +119,11 @@ def _user_id(props) -> str:
     return uid if len(uid) >= 5 else uid.ljust(5, "_")
 
 
-def _post(event: str, props: dict, user_id: str, when_ms: int) -> None:
+def _post(event: str, props: dict, user_id: str, when_ms: int, insert_id: str | None = None) -> None:
     key = os.environ.get("AMPLITUDE_API_KEY", "").strip()
     body = {"api_key": key, "events": [{
         "user_id": user_id, "event_type": event, "event_properties": props, "time": when_ms,
-        "insert_id": str(uuid.uuid4()), "platform": "clawback-backend"}]}
+        "insert_id": insert_id or str(uuid.uuid4()), "platform": "clawback-backend"}]}
     try:
         with _make_client() as c:
             r = c.post(_url(), json=body)
@@ -138,8 +138,9 @@ def _post(event: str, props: dict, user_id: str, when_ms: int) -> None:
         log.warning("amplitude send failed: %s", exc)
 
 
-def track(event: str, props: dict | None = None) -> None:
-    """Record an event. Never raises, never blocks the caller."""
+def track(event: str, props: dict | None = None, *, insert_id: str | None = None) -> None:
+    """Record an event. Never raises, never blocks the caller. `insert_id` makes Amplitude drop a repeat of the same
+    event (used for events derived from database rows, so a restart can never double-count)."""
     try:
         _load_once()
         safe = _safe_props(props)
@@ -151,12 +152,31 @@ def track(event: str, props: dict | None = None) -> None:
         if os.environ.get("AMPLITUDE_API_KEY", "").strip():
             with _lock:
                 _stat["queued"] += 1
-            _executor.submit(_post, event, safe, _user_id(props), int(now.timestamp() * 1000))
+            _executor.submit(_post, event, safe, _user_id(props), int(now.timestamp() * 1000), insert_id)
     except Exception as exc:        # tracking must never take the app down
         log.warning("track(%s) failed: %s", event, exc)
 
 
 # ---- read side (Under the hood, voice) ----------------------------------------------------------------
+
+def logged_keys() -> set[str]:
+    """`dedupe_key`s of events already in the log file (derived events carry one), across all days."""
+    path = _log_path()
+    keys: set[str] = set()
+    if path is None or not path.exists():
+        return keys
+    try:
+        for line in path.read_text().splitlines():
+            try:
+                k = (json.loads(line).get("props") or {}).get("dedupe_key")
+            except ValueError:
+                continue
+            if k:
+                keys.add(str(k))
+    except Exception as exc:
+        log.warning("could not read the analytics log: %s", exc)
+    return keys
+
 
 def today_counts() -> dict[str, int]:
     _load_once()

@@ -49,6 +49,16 @@ WHERE l.id = %s
 ORDER BY ph.seen_at DESC
 LIMIT 20"""
 
+# ---- the "tamper with the database" judge stunt (reference for Teammate A's saved queries) -------------------------------
+# NOT part of LIVE_QUERIES: Under the hood is read-only, so it never runs these. They are for the person on stage
+# (paste into the SingleStore console) and for A's saved-query list. The Pact text is canonical JSON with no spaces
+# (see sign.py), so these exact literals match; the result is a Pact whose hash and signature no longer verify.
+# The next decision then stops on R1 and Under the hood shows a red X on that Pact version. TAMPER_RESTORE_SQL puts it back.
+TAMPER_STUNT_SQL = ("UPDATE pacts SET pact_text = REPLACE(pact_text, '\"max_rebuy_price_usd\":250', "
+                    "'\"max_rebuy_price_usd\":1000') WHERE pact_id = %s AND version = %s")
+TAMPER_RESTORE_SQL = ("UPDATE pacts SET pact_text = REPLACE(pact_text, '\"max_rebuy_price_usd\":1000', "
+                      "'\"max_rebuy_price_usd\":250') WHERE pact_id = %s AND version = %s")
+
 LIVE_QUERIES = {
     "stopped_this_week": ("What the Pact stopped this week, and why", STOPPED_THIS_WEEK),
     "recovered_by_store": ("Dollars recovered by store", RECOVERED_BY_STORE),
