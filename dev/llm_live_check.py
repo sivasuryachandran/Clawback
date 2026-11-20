@@ -10,8 +10,12 @@ Part B: the earbuds claim + store replies through the real endpoints, with the r
         proof, the two injections, store credit. Shows what a judge would see.
 """
 import os
-import sys
-import time
+
+# Dev tools use the stand-in db + gate pair; must be set BEFORE backend.agent.deps is imported.
+os.environ.setdefault("CLAWBACK_USE_STUBS", "1")
+
+import sys  # noqa: E402
+import time  # noqa: E402
 
 from dotenv import load_dotenv
 
