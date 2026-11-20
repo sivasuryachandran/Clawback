@@ -1,0 +1,15 @@
+From: orders@mockstore.example
+To: u_demo@example.com
+Subject: Your Mock Store order MS-55021 has shipped
+Date: Mon, 02 Nov 2026 09:30:00 -0800
+Content-Type: text/plain; charset=utf-8
+
+Thanks for your order!
+
+Store: mockstore
+Order: MS-55021
+OrderDate: 2026-11-02
+DeliveryDate: 2026-11-04
+ITEM|title=Nimbus Smart Lamp|sku=MS-2002|upc=850001000028|model=NIM-LMP2|variant=White|category=home|price=239.00|qty=1
+
+We'll email you when it ships.
