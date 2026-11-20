@@ -424,3 +424,19 @@ Consequences:
 - `dev/llm_live_check.py` now supports `LLM_PROVIDER=ollama`, and detects a fallback to the rules
   from the saved proposals (after integration, analytics go to C's real `track`, so the old
   event-based check stayed silent).
+
+## Airbyte send: one-command live check (for the teammate with Airbyte)
+
+`python -m dev.airbyte_send_check [--base http://localhost:8001] [--yes]` against the RUNNING server.
+Step 0 reads the server's own demo mode, support inbox and allowlist from `GET /debug/overview` and
+**stops before sending anything** if demo mode is off, the inbox isn't allowlisted, a retailer is
+allowlisted, the inbox differs from the shell's `DEMO_SUPPORT_INBOX`, or it's a placeholder
+(`support@mockstore.test`: the server was started without the `DEMO_*` exports, because
+`backend.dev_app` seeds before it reads `.env`). Then it sends at most 2 emails: the earbuds claim
+(expects done + a Gmail thread id, not `thr_...`) and a "send proof" reply in the same thread;
+an injected judge@example.com reply must stop with nothing sent.
+Tested here against the file transport: guard stop OK; full run 11/12 (only "thread id came back
+from Gmail" fails, as it should without Airbyte).
+**For A:** `backend/ingest/gmail_ingest.py` calls `airbyte_agent_sdk.AirbyteAgent(client_id=...)`,
+which isn't in Airbyte's docs; the documented call is `from airbyte_agent_sdk import connect` then
+`connect("gmail", workspace_name=...)` (reads AIRBYTE_CLIENT_ID/SECRET from the environment).
