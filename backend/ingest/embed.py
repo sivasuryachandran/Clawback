@@ -69,10 +69,19 @@ def vec_to_json(vec: list[float]) -> str:
     return json.dumps(vec)
 
 
-def vec_from_json(text: str | None) -> list[float] | None:
-    if not text:
+def vec_from_json(text) -> list[float] | None:
+    """Accepts a JSON string (SQLite's TEXT column) or an already-decoded array-like
+    value -- SingleStore's driver returns VECTOR columns as numpy arrays, not JSON
+    text, and `if not <numpy array with >1 element>` raises ValueError, not False."""
+    if text is None:
         return None
-    return json.loads(text)
+    if isinstance(text, str):
+        if not text:
+            return None
+        return json.loads(text)
+    if hasattr(text, "tolist"):
+        return text.tolist()
+    return list(text) if len(text) else None
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
