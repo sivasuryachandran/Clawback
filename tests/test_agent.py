@@ -312,3 +312,35 @@ def test_claim_packet_flow_when_it_passes(env, monkeypatch):
     pid = int(r["result"].split()[-1])
     pk = env.client.get(f"/claim-packets/{pid}").json()
     assert pk["packet"]["diff"] == 20.0 and "adjust my order" in pk["chat_script"]
+
+
+# ---------- stretch: policy live edit (local stand-in for the Senso edit) ----------
+
+def test_live_edit_14_to_7(env, tmp_path):
+    """Earbuds bought Nov 11. With a 7-day window the adjust window closed Nov 18."""
+    import shutil
+    from backend.agent.senso_client import LocalPolicySource, set_policy_source
+    from dev.stubs import db
+    from dev.stubs import pact as gate
+    first = env.propose("earbuds")
+    assert first["decision"] == "ALLOW"
+    stored = json.loads(q("SELECT payload_json FROM proposals WHERE id = %s",
+                          (first["proposal_id"],))[0]["payload_json"])
+    pol = tmp_path / "pol"
+    shutil.copytree("tests/fixtures/policies", pol)
+    doc = pol / "mockstore.md"
+    doc.write_text(doc.read_text().replace("14 days from purchase", "7 days from purchase"))
+    set_policy_source(LocalPolicySource(str(pol)))
+    db.execute("UPDATE store_policies SET adjust_window_days = 7 WHERE store = 'mockstore'")
+    # Re-check the policy, then re-run the SAME claim through the gate (new revision quoted).
+    db.execute("DELETE FROM executed_actions")  # pretend the first claim never ran
+    from backend.agent.policy import check_policy
+    pc = q("SELECT * FROM policy_checks WHERE id = %s", (check_policy(env.ids["earbuds"]),))[0]
+    the_pact, _ = gate.active_pact("u_demo")
+    d = gate.run_gate(stored, the_pact, gate.build_context(env.ids["earbuds"], {"id": "u_demo"}))
+    assert (d.decision, d.failed_rule) == ("BLOCK", "R7")
+    # The fresh question is about returns now (adjust window closed), so the quote is the
+    # return sentence, NOT the new 7-day sentence. See REHEARSAL_NOTES.md.
+    assert pc["revision"] != q("SELECT revision FROM policy_checks ORDER BY id LIMIT 1")[0]["revision"]
+    # And a fresh propose() no longer asks for an adjustment: it proposes a rebuy instead.
+    assert env.propose("earbuds")["action_type"] == "rebuy_return"
