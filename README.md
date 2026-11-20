@@ -125,7 +125,7 @@ uvicorn backend.dev_app:app --port 8001
 pytest -q
 ```
 
-The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voice, and end-to-end runs of the real app. `569 passed, 1 skipped` on Python 3.11 and 3.12. `[Refresh this line at 4:00.]`
+The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voice, and end-to-end runs of the real app. `573 passed, 1 skipped` on Python 3.11 and 3.12. `[Refresh this line at 4:00.]`
 
 ## Real vs simulated
 

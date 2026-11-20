@@ -152,7 +152,9 @@ def track(event: str, props: dict | None = None, *, insert_id: str | None = None
         if os.environ.get("AMPLITUDE_API_KEY", "").strip():
             with _lock:
                 _stat["queued"] += 1
-            _executor.submit(_post, event, safe, _user_id(props), int(now.timestamp() * 1000), insert_id)
+            tag = os.environ.get("ANALYTICS_RUN_TAG", "").strip()      # lets a chart show one run only (rehearsals stay out)
+            sent = dict(safe, run_tag=tag[:40]) if tag else safe
+            _executor.submit(_post, event, sent, _user_id(props), int(now.timestamp() * 1000), insert_id)
     except Exception as exc:        # tracking must never take the app down
         log.warning("track(%s) failed: %s", event, exc)
 
