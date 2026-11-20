@@ -105,7 +105,14 @@ function card(a) {
 
 // ---- screens --------------------------------------------------------------
 let activityCache = [];
-async function loadActivity() { try { activityCache = await api("/activity"); } catch { /* keep last */ } return activityCache; }
+let activityAt = 0, activityInFlight = null;
+// /activity runs many queries (about 3 s on SingleStore): share one request between pages and reuse it for 6 s.
+async function loadActivity(force) {
+  if (!force && activityAt && Date.now() - activityAt < 6000) return activityCache;
+  if (!activityInFlight) activityInFlight = api("/activity").then((r) => { activityCache = r; activityAt = Date.now(); }).catch(() => {}).finally(() => { activityInFlight = null; });
+  await activityInFlight;
+  return activityCache;
+}
 
 async function purchaseCards() {
   const acts = await loadActivity();
@@ -311,10 +318,18 @@ let tab = "money", busy = false, orbHold = null, selected = null;
 function latestPerItem(acts) { const m = new Map(); acts.forEach((x) => { const k = x.line_item_id ?? x.opportunity_id; if (!m.has(k)) m.set(k, x); }); return [...m.values()]; }
 const pendingOk = () => latestPerItem(activityCache).filter((x) => x.decision === "ASK" && x.approval_id);
 const wide = () => matchMedia("(min-width:960px)").matches;
+let renderSeq = 0, inFlight = false;
 async function render(keepScroll) {
-  if (busy) return; busy = true;
+  // Navigation must never be ignored while a slow page is still loading (SingleStore answers in seconds):
+  // every render gets a number, and only the newest one is allowed to paint.
+  const seq = ++renderSeq, myTab = tab;
+  inFlight = true;
   const y = scrollY;
-  try { $("#view").innerHTML = await screens[tab](); } catch (e) { $("#view").innerHTML = `<p class="sub">${esc(e.message)}</p>`; }
+  if (!keepScroll) { document.body.classList.toggle("home", myTab === "money"); $("#view").innerHTML = '<p class="sub">Loading…</p>'; }
+  let html;
+  try { html = await screens[myTab](); } catch (e) { html = `<p class="sub">${esc(e.message)}</p>`; }
+  if (seq !== renderSeq) return;                       // a newer navigation took over
+  $("#view").innerHTML = html;
   document.body.classList.toggle("home", tab === "money");
   document.body.classList.toggle("has-side", ["needs", "purchases", "activity"].includes(tab));
   document.title = ({ money: "Home", needs: "Needs your OK", purchases: "Purchases", activity: "Activity", schedules: "Schedule", pact: "Your Pact", about: "About" }[tab] || "Clawback") + " · Clawback";
@@ -327,7 +342,7 @@ async function render(keepScroll) {
   if (window.Orb && !window.Orb.busy) Orb.set(orbHold || (pendingOk().length ? "ask" : "idle"));
   document.querySelectorAll("nav a, .rail-foot .links a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   if (keepScroll) scrollTo(0, y);
-  busy = false;
+  inFlight = false;
 }
 function route() { tab = (location.hash || "#money").slice(1); if (!screens[tab]) tab = "money"; render(); }
 addEventListener("hashchange", route);
@@ -356,8 +371,8 @@ document.addEventListener("click", async (e) => {
     else if (d.why) { const slot = t.closest(".card, .tl-item").querySelector("[data-slot]"); const a = activityCache.find((x) => "w" + (x.audit_id ?? x.opportunity_id) === d.why);
       slot.innerHTML = slot.innerHTML ? "" : (a ? whyPanel(a) : ""); }
     else if (d.approve) { t.disabled = true; if (!(await liveHumanCheck())) { t.disabled = false; return; } const r = await api("/approvals/" + d.approve, { method: "POST", body: JSON.stringify({ decision: "approve" }) });
-      if (window.Orb) { orbHold = r.status === "done" ? "done" : "stopped"; setTimeout(() => { orbHold = null; render(true); }, 4000); }
-      toast(r.status === "done" ? "Done. We bought it again and returned the old one." : r.status === "stopped" ? "Stopped by your rules. Nothing was bought." : "Already handled."); render(true); }
+      if (window.Orb) { orbHold = r.status === "done" ? "done" : "stopped"; setTimeout(() => { orbHold = null; render(true); }, 8000); }
+      toast(r.status === "done" ? "Done. We bought it again and returned the old one." : r.status === "stopped" ? "Stopped by your rules. Nothing was bought." : "Already handled."); activityAt = 0; render(true); }
     else if (d.decline) { await api("/approvals/" + d.decline, { method: "POST", body: JSON.stringify({ decision: "decline" }) }); toast("No problem. Nothing was bought."); render(true); }
     else if (d.copy !== undefined) { await navigator.clipboard.writeText(d.copy); toast("Copied."); }
     else if (d.chip) { activity.filter = d.chip; render(); }
@@ -384,7 +399,7 @@ async function startPersona() {
     onComplete: () => { toast("Verified. Thank you."); render(); }, onCancel: () => {}, onError: () => toast("Verification didn't finish. Nothing was changed.") }).open();
 }
 
-setInterval(() => { if (!document.hidden && !checking && !["pact", "about", "schedules"].includes(tab) && !document.querySelector("[data-slot]:not(:empty)")) render(true); }, 4000);
+setInterval(() => { if (!document.hidden && !checking && !inFlight && !["pact", "about", "schedules"].includes(tab) && !document.querySelector("[data-slot]:not(:empty)")) render(true); }, 4000);
 route();
 
 // ---- voice / ask box (section 3.11): explains and pauses; never approves money ----
