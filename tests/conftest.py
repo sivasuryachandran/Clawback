@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+os.environ.setdefault("CLAWBACK_USE_STUBS", "1")   # B's agent tests run on B's stub db + stub gate (one consistent pair)
 os.environ.setdefault("PACT_SIGNING_KEY", "test-signing-key-0123456789abcdef0123456789")
 
 from backend.pact import sign

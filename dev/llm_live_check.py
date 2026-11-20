@@ -17,25 +17,28 @@ from dotenv import load_dotenv
 
 
 def main() -> int:
-    load_dotenv()
+    load_dotenv(".env")
+    provider = (os.environ.get("LLM_PROVIDER") or "").lower()
     key = os.environ.get("LLM_API_KEY")
-    if not key:
-        print("LLM_API_KEY is not set. Put it in .env (never commit it) and run again.")
-        return 2
-    try:
-        import anthropic  # noqa: F401
-    except ImportError:
-        print("The anthropic SDK is not installed: pip install anthropic")
-        return 2
+    if provider not in ("ollama", "openai_compat"):
+        if not key:
+            print("Set LLM_API_KEY (Anthropic) or LLM_PROVIDER=ollama in .env and run again.")
+            return 2
+        try:
+            import anthropic  # noqa: F401
+        except ImportError:
+            print("The anthropic SDK is not installed: pip install anthropic")
+            return 2
 
     import io
-    from backend.agent.llm import AnthropicLLM, RuleBasedLLM, set_llm
+    from backend.agent.llm import AnthropicLLM, RuleBasedLLM, get_llm, set_llm
     from backend.agent.propose import SYSTEM, TOOL, LLMChoice, build_prompt, load_facts
     from dev.firedrill_local import fresh_world
     from dev.stubs import analytics
 
-    llm = AnthropicLLM(key)
-    print(f"model: {llm.model}\n\nPart A: one proposal per seed item")
+    set_llm(None)
+    llm = get_llm() if provider in ("ollama", "openai_compat") else AnthropicLLM(key)
+    print(f"provider: {type(llm).__name__}  model: {llm.model}\n\nPart A: one proposal per seed item")
     totals = {"ms": 0, "in": 0, "out": 0, "calls": 0}
     problems = []
 
@@ -43,8 +46,8 @@ def main() -> int:
         totals["calls"] += 1
         totals["ms"] += llm.last.get("ms", 0)
         usage = llm.last.get("usage") or {}
-        totals["in"] += usage.get("input_tokens", 0)
-        totals["out"] += usage.get("output_tokens", 0)
+        totals["in"] += usage.get("input_tokens", usage.get("prompt_tokens", 0)) or 0
+        totals["out"] += usage.get("output_tokens", usage.get("completion_tokens", 0)) or 0
 
     with fresh_world("seed/policies") as w:
         from backend.agent.policy import check_policy
@@ -100,7 +103,11 @@ def main() -> int:
                 out.append((label, r, int((time.time() - t1) * 1000)))
         finally:
             sys.stdout = real
-        fell_back = [p for e, p in analytics.EVENTS if e == "llm_unavailable"]
+        # Read fallback from the saved proposals, not from analytics: after integration, track()
+        # goes to C's real module, so the stub's EVENTS stays empty and a fallback looked silent.
+        from backend.agent.propose import FALLBACK_NOTE
+        fell_back = [r["reasoning"][:60] for r in db.query("SELECT reasoning FROM proposals")
+                     if (r["reasoning"] or "").endswith(FALLBACK_NOTE)]
         print(f"  claim       {claim['action_type']} -> {claim['decision']} {claim.get('status', '')} "
               f"({claim_ms} ms)  {claim.get('reasoning', '')[:70]}")
         for label, r, ms in out:

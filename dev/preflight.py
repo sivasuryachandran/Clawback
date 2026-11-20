@@ -29,6 +29,12 @@ def run_checks(http=None, live: bool = False, warm: bool = False) -> list[tuple[
     # --- email safety config ---
     add(OK if demo_mode() else WARN, "demo mode",
         "on" if demo_mode() else "OFF: DEMO_MODE is exactly 'false'; live recipients rules apply")
+    from backend.agent import clock
+    if clock.pinned():
+        add(WARN, "clock", f"pinned by CLAWBACK_NOW/CLAWBACK_TODAY ({clock.now()}); Siva's gate uses real "
+                           "UTC, so unset both on event day")
+    else:
+        add(OK, "clock", f"real UTC {clock.now()} (same as the gate)")
     allow = allowed_recipients()
     add(OK if allow else FAIL, "allowlist", ", ".join(sorted(allow)) or "DEMO_ALLOWED_RECIPIENTS is empty")
     bad = [a for a in allow if a.rsplit("@", 1)[-1] in RETAILERS]

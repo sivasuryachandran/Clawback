@@ -1,16 +1,17 @@
-From: orders@bestbuy.com
+From: BestBuyInfo@emailinfo.bestbuy.com
 To: u_demo@example.com
-Subject: Your Best Buy order BBY01-PLACEHOLDER has shipped
+Subject: Your Best Buy order BBY01-806512341 has shipped
 Date: Sat, 14 Nov 2026 16:00:00 -0800
 Content-Type: text/plain; charset=utf-8
 
-PLACEHOLDER RECEIPT -- matches dev/stubs/seed.py's placeholder row exactly (same SKU,
-UPC, dates) so swapping this real ingest path in for the rehearsal stub changes nothing
-else. Replace with a real Best Buy item (and matching listing in load_seed.py) once the
-team picks one.
+DUMMY DEMO RECEIPT (not a real purchase). Made for the Clawback demo.
+
+Thanks for shopping at Best Buy!
 
 Store: bestbuy
-Order: BBY01-PLACEHOLDER
+Order: BBY01-806512341
 OrderDate: 2026-11-14
 DeliveryDate: 2026-11-16
-ITEM|title=PLACEHOLDER Best Buy item|sku=BB-PLACEHOLDER|upc=000000000001|model=|variant=Standard|category=electronics|price=49.99|qty=1
+ITEM|title=Logitech MX Anywhere 3S Wireless Mouse|sku=BB-LGT-MXA3S|upc=850002000010|model=MXA3S|variant=Graphite|category=electronics|price=79.99|qty=1
+
+Subtotal: $79.99. Questions? Reply to this email or visit bestbuy.com/orders.

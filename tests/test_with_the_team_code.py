@@ -34,6 +34,7 @@ def app(tmp_path_factory):
                OUTBOX_DIR=str(tmp / "outbox"), INBOX_DIR=str(tmp / "inbox"), LOG_LEVEL="WARNING", PYTHONDONTWRITEBYTECODE="1")
     env.pop("PERSONA_API_KEY", None)
     env.pop("LLM_API_KEY", None)
+    env.pop("CLAWBACK_USE_STUBS", None)        # tests/conftest.py sets it for the unit tests; the real stack must not inherit it
     # The child's output goes to a FILE, never a pipe nobody reads: a full 64 KB pipe blocks the child on write and freezes the app
     # (failed webhooks print long tracebacks, and enough of them filled the pipe).
     log_path = tmp / "app.log"

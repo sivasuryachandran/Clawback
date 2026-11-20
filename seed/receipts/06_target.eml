@@ -1,17 +1,17 @@
 From: orders@target.com
 To: u_demo@example.com
-Subject: Your Target order TGT-PLACEHOLDER has shipped
+Subject: Your Target order TGT-102884551 has shipped
 Date: Mon, 24 Aug 2026 12:00:00 -0800
 Content-Type: text/plain; charset=utf-8
 
-PLACEHOLDER RECEIPT -- matches dev/stubs/seed.py's placeholder row exactly. Target's
-real return window is 90 days from purchase (seed/policies/target.md), so this order is
-dated ~88 days before CLAWBACK_TODAY (2026-11-20) -- inside the 7-day "closes soon" alert.
-Replace with a real Target item (and matching listing in load_seed.py) once the team picks
-one; keep it in a non-final-sale category with a similar return-window margin.
+DUMMY DEMO RECEIPT (not a real purchase). Made for the Clawback demo.
+
+Your order is on its way!
 
 Store: target
-Order: TGT-PLACEHOLDER
+Order: TGT-102884551
 OrderDate: 2026-08-24
 DeliveryDate: 2026-08-26
-ITEM|title=PLACEHOLDER Target item|sku=TG-PLACEHOLDER|upc=000000000002|model=|variant=Standard|category=home|price=29.99|qty=1
+ITEM|title=Threshold Chunky Knit Throw Blanket|sku=TG-THR-KNT1|upc=850002000027|model=THR-KNT1|variant=Cream|category=home|price=39.99|qty=1
+
+Order total: $39.99. Return by your 90-day window at any Target store.

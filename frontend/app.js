@@ -285,6 +285,26 @@ function renderSide() {
     : `<div class="card"><h2 style="margin-top:0">Why?</h2><p class="hint">Choose <b>Why?</b> on any card to see exactly what Clawback saw, what the store's policy says, and which of your rules decided it.</p></div>`;
 }
 
+let checking = false;
+// Persona Relay: a quick "live human present" check before money moves (only when the backend has Relay configured).
+async function liveHumanCheck() {
+  let st; try { st = await api("/persona/relay/status"); } catch { return true; }
+  if (!st.enabled || st.fresh) return true;
+  checking = true;
+  try {
+    const { url } = await api("/persona/relay/start", { method: "POST" });
+    toast("Confirm you're a live human in the tab that just opened.");
+    window.open(url, "_blank", "noopener,noreferrer");
+    for (let i = 0; i < 150; i++) {                         // up to ~5 minutes
+      await new Promise((r) => setTimeout(r, 2000));
+      const r = await api("/persona/relay/complete", { method: "POST" });
+      if (r.status === "passed") { toast("Confirmed. Thank you."); return true; }
+      if (r.status === "failed") { toast("We couldn't confirm you're a live human. Nothing was bought."); return false; }
+    }
+    toast("That took too long. Nothing was bought."); return false;
+  } finally { checking = false; }
+}
+
 // ---- wiring ---------------------------------------------------------------
 const screens = { money, needs, purchases, schedules, pact, activity, about };
 let tab = "money", busy = false, orbHold = null, selected = null;
@@ -334,7 +354,7 @@ document.addEventListener("click", async (e) => {
     if (d.why && wide()) { selected = selected === d.why ? null : d.why; renderSide(); }
     else if (d.why) { const slot = t.closest(".card, .tl-item").querySelector("[data-slot]"); const a = activityCache.find((x) => "w" + (x.audit_id ?? x.opportunity_id) === d.why);
       slot.innerHTML = slot.innerHTML ? "" : (a ? whyPanel(a) : ""); }
-    else if (d.approve) { t.disabled = true; const r = await api("/approvals/" + d.approve, { method: "POST", body: JSON.stringify({ decision: "approve" }) });
+    else if (d.approve) { t.disabled = true; if (!(await liveHumanCheck())) { t.disabled = false; return; } const r = await api("/approvals/" + d.approve, { method: "POST", body: JSON.stringify({ decision: "approve" }) });
       if (window.Orb) { orbHold = r.status === "done" ? "done" : "stopped"; setTimeout(() => { orbHold = null; render(true); }, 4000); }
       toast(r.status === "done" ? "Done. We bought it again and returned the old one." : r.status === "stopped" ? "Stopped by your rules. Nothing was bought." : "Already handled."); render(true); }
     else if (d.decline) { await api("/approvals/" + d.decline, { method: "POST", body: JSON.stringify({ decision: "decline" }) }); toast("No problem. Nothing was bought."); render(true); }
@@ -363,7 +383,7 @@ async function startPersona() {
     onComplete: () => { toast("Verified. Thank you."); render(); }, onCancel: () => {}, onError: () => toast("Verification didn't finish. Nothing was changed.") }).open();
 }
 
-setInterval(() => { if (!document.hidden && !["pact", "about", "schedules"].includes(tab) && !document.querySelector("[data-slot]:not(:empty)")) render(true); }, 4000);
+setInterval(() => { if (!document.hidden && !checking && !["pact", "about", "schedules"].includes(tab) && !document.querySelector("[data-slot]:not(:empty)")) render(true); }, 4000);
 route();
 
 // ---- voice / ask box (section 3.11): explains and pauses; never approves money ----

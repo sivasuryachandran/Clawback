@@ -162,6 +162,8 @@ def decide(approval_id: int, body: Decide, request: Request):
         db.execute("UPDATE approvals SET status='declined', decided_at=%s WHERE id=%s", (_now().strftime(FMT), approval_id))
         _track("approval_resolved", {"status": "declined"})
         return {"status": "declined"}
+    from backend.persona import relay          # live-human check (only when Relay is configured)
+    relay.require_fresh(uid)
     # Approve: fresh Persona re-check first (raises 403 if not still verified), then run A1 + full gate.
     from backend.persona.api import recheck
     recheck(request)

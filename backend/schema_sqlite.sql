@@ -93,3 +93,12 @@ CREATE TABLE IF NOT EXISTS claim_packets (
   id INTEGER PRIMARY KEY AUTOINCREMENT, opportunity_id INTEGER, proposal_hash TEXT,
   store TEXT, packet_json TEXT, chat_script TEXT, created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, name TEXT, kind TEXT,
+  schedule_type TEXT, interval_min INTEGER, at_time TEXT, enabled INTEGER DEFAULT 1,
+  next_run TEXT, last_run TEXT NULL, last_status TEXT NULL, last_result TEXT NULL,
+  created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS scheduled_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, task_id INTEGER, ran_at TEXT, status TEXT, result TEXT
+);

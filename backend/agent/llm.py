@@ -6,8 +6,14 @@ AnthropicLLM: Anthropic Python SDK, model LLM_MODEL (default claude-opus-5-5), k
   NOTE: claude-opus-5-5 rejects forced tool_choice ({"type":"tool"} / "any") with a 400, so we
   send tool_choice auto + strict: true and instruct the model to call the tool. A reply without
   the tool call returns None (caller retries once, then falls back to "none").
+OpenAICompatLLM: any OpenAI-compatible /chat/completions endpoint with function calling. FREE
+  options: local Ollama (LLM_PROVIDER=ollama, default base http://localhost:11434/v1, no key, e.g.
+  LLM_MODEL=qwen3:8b) or any hosted free tier speaking the same API (LLM_BASE_URL + LLM_API_KEY).
 RuleBasedLLM: offline, deterministic; applies the same choice guidance from `facts`. Used when
-  LLM_API_KEY is unset so tests run without a network.
+  no provider is configured, so tests run without a network.
+
+Choosing: LLM_PROVIDER = anthropic | ollama | openai_compat | rules. Unset: anthropic if
+LLM_API_KEY is set, else rules.
 """
 import os
 from typing import Protocol
@@ -63,6 +69,51 @@ class AnthropicLLM:
             tool_choice={"type": "auto"},
             messages=[{"role": "user", "content": user}],
         )
+
+
+class OpenAICompatLLM:
+    """POST {base}/chat/completions with one function tool, tool_choice "auto", temperature 0.
+    Returns the function arguments (a JSON string in the OpenAI format; some servers send a dict).
+    No tool call -> None (caller retries once, then "none"); errors raise -> offline rules decide."""
+
+    last: dict = {}
+
+    def __init__(self, base_url: str, model: str, api_key: str | None = None, http=None,
+                 timeout_s: float | None = None):
+        import httpx
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.headers = {"Content-Type": "application/json"}
+        if api_key:
+            self.headers["Authorization"] = f"Bearer {api_key}"
+        t = timeout_s or float(os.environ.get("LLM_TIMEOUT_S", "60"))  # local CPU models are slower
+        self.http = http or httpx.Client(timeout=t)
+
+    def call_tool(self, system, user, tool, facts):
+        import json
+        import time
+        body = {
+            "model": self.model, "temperature": 0, "stream": False,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "tools": [{"type": "function", "function": {
+                "name": tool["name"], "description": tool.get("description", ""),
+                "parameters": tool["input_schema"]}}],
+            "tool_choice": "auto",
+        }
+        t = time.time()
+        r = self.http.post(f"{self.base_url}/chat/completions", headers=self.headers, json=body)
+        r.raise_for_status()
+        data = r.json()
+        msg = (data.get("choices") or [{}])[0].get("message") or {}
+        self.last = {"ms": int((time.time() - t) * 1000), "model": data.get("model", self.model),
+                     "usage": data.get("usage"),
+                     "stop_reason": (data.get("choices") or [{}])[0].get("finish_reason")}
+        for call in msg.get("tool_calls") or []:
+            fn = call.get("function") or {}
+            if fn.get("name") == tool["name"]:
+                args = fn.get("arguments")
+                return json.loads(args) if isinstance(args, str) else dict(args or {})
+        return None
 
 
 class RuleBasedLLM:
@@ -135,7 +186,15 @@ def set_llm(llm: LLM | None) -> None:
 def get_llm() -> LLM:
     if _override is not None:
         return _override
+    provider = (os.environ.get("LLM_PROVIDER") or "").strip().lower()
     key = os.environ.get("LLM_API_KEY")
-    if key:
+    if provider == "rules":
+        return RuleBasedLLM()
+    if provider == "ollama":
+        return OpenAICompatLLM(os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),
+                               os.environ.get("LLM_MODEL", "qwen3:8b"), key)
+    if provider == "openai_compat":
+        return OpenAICompatLLM(os.environ["LLM_BASE_URL"], os.environ["LLM_MODEL"], key)
+    if key and provider in ("", "anthropic"):
         return AnthropicLLM(key)
     return RuleBasedLLM()
