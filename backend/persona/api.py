@@ -99,3 +99,8 @@ def recheck(request: Request):
 def status(request: Request):
     rows = _db().query("SELECT name, persona_status, verified_at FROM users WHERE id=%s", (user_id_from(request),))
     return rows[0] if rows else {"persona_status": "none"}
+
+
+# Relay (live-human check before money moves): mounted here so C's main.py needs no extra line.
+from .relay import router as _relay_router  # noqa: E402
+router.include_router(_relay_router)
