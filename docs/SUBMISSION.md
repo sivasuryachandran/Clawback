@@ -13,7 +13,7 @@ vector search (across stores, by UPC or model number). When a price drops inside
 window, it checks the store's real policy through Senso and proposes an action: a price-adjustment request, a claim packet
 for stores that only take chat, a rebuy-and-return, or a deadline reminder. Every proposal passes a deterministic Pact gate
 the user signed after verifying with Persona. The LLM proposes; code decides. Each decision shows the receipt, the price
-found, the quoted policy and the rule that decided it. Built with `[only the sponsors that ran live: SingleStore, Senso, Persona, Arcee, Amplitude, Airbyte?]`. Simulated for the demo: the mock store's prices and support rep.
+found, the quoted policy and the rule that decided it. Built with `[only the sponsors that ran live: Amplitude, the NVIDIA-hosted LLM, Airbyte (file-source sync), and SingleStore / Persona / Senso only if they ran]`. Simulated for the demo: the mock store's prices and support rep.
 
 *(Edit the tools list to what actually shipped: if Arcee, SIE rerank or Firedrill were cut, remove them. Never list a sponsor
 whose removal would not break something visible in the demo.)*
@@ -27,7 +27,7 @@ whose removal would not break something visible in the demo.)*
 | Team | Siva Surya Chandran, `[Teammate A]`, `[Teammate B]`, `[Teammate C]` |
 | Emails | `[...]` |
 | Screenshot | a "Stopped by your rules" card with its Why? panel open |
-| Tools used | `[Amplitude (events + dashboard), SingleStore, Persona (sandbox), Arcee, Senso, Airbyte (read path) only if it ran]`, an LLM API for proposals, `[Firedrill if kept]` |
+| Tools used | Amplitude (events + dashboard), NVIDIA's free hosted LLM (OpenAI-compatible API) for proposals, Airbyte Core (file-source sync, Gmail simulated), `[SingleStore, Persona (sandbox), Senso only if they ran live]`, `[Firedrill if kept]`. Arcee is not listed: parsing used the offline fallback. |
 
 ## Numbers to fill in at 4:00
 
