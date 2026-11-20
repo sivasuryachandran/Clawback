@@ -2,7 +2,8 @@
 
     .venv/bin/uvicorn backend.dev_app:app --port 8000
 
-Stand-ins (backend/pact/devkit.py) are installed ONLY for modules that don't exist yet (A's db / watch),
+This app ALWAYS runs on the in-memory stand-in database (seeded with a verified user and a signed Pact), even after A's real
+backend/db.py exists; use `uvicorn backend.main:app` for A's real database. The other stand-ins (watch, actor) only fill modules that are missing,
 then C's real backend/main.py mounts every router that does exist (C, B, Siva). Delete this file when A lands.
 """
 import os
@@ -11,7 +12,7 @@ os.environ.setdefault("CLAWBACK_API_BASE", "http://localhost:8000")
 
 from backend.pact import devkit  # noqa: E402
 
-INSTALLED = devkit.install(run_pipeline=False)     # B's propose endpoint runs the pipeline
+INSTALLED = devkit.install(run_pipeline=False, force_db=True)   # always the in-memory stand-in db (this app is the no-database demo); B's propose endpoint runs the pipeline
 
 from backend.main import app  # noqa: E402,F401   (C's app: mounts mockstore, analytics, debug, voice, pact, schedules, persona, agent)
 from backend.persona import api as persona_api  # noqa: E402
