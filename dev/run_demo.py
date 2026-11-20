@@ -5,6 +5,11 @@ one plain line per item (team spec 3.10 words).
     python -m dev.run_demo --fixture-policies  # TEST FIXTURE text for Target/Best Buy (not real)
 """
 import os
+
+# Dev tools seed the STAND-IN world (dev/stubs), so they must use the stand-in db + gate pair:
+# with A's backend/db.py present, deps would otherwise pair it with Siva's real gate (no such table: pacts).
+os.environ.setdefault("CLAWBACK_USE_STUBS", "1")
+
 import shutil
 import sys
 from pathlib import Path
