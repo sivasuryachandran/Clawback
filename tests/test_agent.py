@@ -481,7 +481,7 @@ def test_reply_next_day_gets_fresh_quote(env, monkeypatch):
     r = _reply(env, "Please send proof", t)
     assert (r["decision"], r["sent"]) == ("ALLOW", True)
     last = q("SELECT fetched_at, question FROM policy_checks ORDER BY id DESC LIMIT 1")[0]
-    assert last["fetched_at"] == "2026-11-21 13:00:00" and "adjust prices" in last["question"]
+    assert last["fetched_at"] == "2026-11-21 13:00:00" and "adjust or match" in last["question"]
 
 
 def test_reply_next_day_with_source_down_stops_r6(env, monkeypatch):

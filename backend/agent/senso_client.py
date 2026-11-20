@@ -27,11 +27,19 @@ def _no_source(answer: str) -> dict:
             "revision": None}
 
 
+# A few synonyms so policy wording ("the time period begins the day you receive") matches
+# our questions ("how long is the return window, when does it start"). Stand-in only:
+# real Senso does semantic search.
+_SYN = {"begin": "start", "begins": "start", "period": "window", "periods": "window",
+        "receive": "delivery", "delivered": "delivery", "days": "long", "day": "long"}
+
+
 def _stems(text: str, drop: set[str]) -> set[str]:
     out = set()
     for w in re.findall(r"[a-z0-9]+", text.lower()):
         if w in _STOP or w in drop:
             continue
+        w = _SYN.get(w, w)
         out.add(w[:5] if len(w) >= 5 else w)
     return out
 
@@ -43,39 +51,43 @@ class LocalPolicySource:
         self.folder = Path(folder or os.environ.get("POLICY_DIR", "seed/policies"))
 
     def _load(self, store: str):
+        """-> (revision, [(sentence, source_url)]). A `Source: <url>` line applies to the
+        sentences after it, so one file can quote several official pages. Lines starting
+        with `>` are our notes, never quoted."""
         path = self.folder / f"{store}.md"
         if not path.exists():
-            return None, None, []
+            return None, []
         raw = path.read_text(encoding="utf-8")
-        lines = raw.splitlines()
-        url = None
-        if lines and lines[0].lower().startswith("source:"):
-            url = lines[0].split(":", 1)[1].strip()
-            if PLACEHOLDER in url.upper():
-                url = None
-        body = re.sub(r"<!--.*?-->", "", "\n".join(lines[1:]), flags=re.S)
-        sentences = []
+        body = re.sub(r"<!--.*?-->", "", raw, flags=re.S)
+        url, out = None, []
         for ln in body.splitlines():
-            ln = ln.strip().lstrip("-*").strip()
-            if not ln or ln.startswith("#") or PLACEHOLDER in ln.upper():
+            ln = ln.strip()
+            if ln.lower().startswith("source:"):
+                url = ln.split(":", 1)[1].strip()
+                url = None if PLACEHOLDER in url.upper() else url
+                continue
+            ln = ln.lstrip("-*").strip()
+            if not ln or ln.startswith(("#", ">")) or PLACEHOLDER in ln.upper():
                 continue
             if ln.lower().startswith("text exactly as"):
                 continue  # our own provenance note, not policy text
-            sentences += [s.strip() for s in re.split(r"(?<=[.!?])\s+", ln) if s.strip()]
+            if url is None:
+                continue  # never quote text that has no source
+            out += [(s.strip(), url) for s in re.split(r"(?<=[.!?])\s+", ln) if s.strip()]
         revision = "sha256:" + hashlib.sha256(raw.encode()).hexdigest()[:12]
-        return url, revision, sentences
+        return revision, out
 
     def ask(self, store: str, question: str) -> dict:
-        url, revision, sentences = self._load(store)
-        if not sentences or not url:
+        revision, sentences = self._load(store)
+        if not sentences:
             return _no_source(f"No policy text loaded for {store}.")
         drop = {w.lower() for w in STORE_NAMES.get(store, store).split()}
         q = _stems(question, drop)
-        scored = [(len(q & _stems(s, drop)), -i, s) for i, s in enumerate(sentences)]
+        scored = [(len(q & _stems(s, drop)), -i, s, u) for i, (s, u) in enumerate(sentences)]
         best = max(scored)
         if best[0] == 0:
             return _no_source("No matching sentence in the policy.")
-        return {"answer": best[2], "cited_text": best[2], "source_url": url,
+        return {"answer": best[2], "cited_text": best[2], "source_url": best[3],
                 "source_id": f"local:{store}", "revision": revision}
 
 

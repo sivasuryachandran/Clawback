@@ -5,7 +5,7 @@ This file is what comes to the event; the code stays home.
 
 ## Results
 
-- `pytest -q`: **54 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
+- `pytest -q`: **53 passed, 1 skipped** (the skip is the 'text not pasted yet' case) (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
 - `python -m dev.run_demo` (6 s) with the real `seed/policies`:
 
 ```
@@ -205,6 +205,43 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
   teammate, the day-of run order and the stunt script. Bring it with this file.
 - Tests: **54 passing**.
 
+## Real Target and Best Buy policies (read 2026-11-19 in the browser)
+
+Copied word for word into `seed/policies/{target,bestbuy}.md`: only the sentences we need,
+each under the `Source:` page it came from (LocalPolicySource now supports several Source
+lines per file). Values used in the `store_policies` seed:
+
+| | Best Buy | Target |
+|---|---|---|
+| Claim channel | chat ("Connect with us via Best Buy Chat") | chat ("Chat with us online") |
+| Own price drop after purchase | matched **during the return and exchange period** | **14 days from purchase** (standard) |
+| Holiday rule (can't be expressed as days) | purchases Oct 30 – Dec 31: price match and returns through **Jan 15, 2027** | purchases Nov 1 – Dec 24: lower Target price on or before **Dec 24** is matched |
+| Competitor prices | only **at the time of sale** → competitor_match_allowed = false | lower price must be at Target.com or a local Target |
+| Return window | standard **15 days from the day you receive it** | **90 days** for most items (365 for Target brand with receipt; electronics have their own windows); **start not stated** → seeded as purchase (shorter, safer) |
+| Excluded from price match | clearance, open-box, refurbished, Marketplace | clearance, closeout, liquidation, refurbished |
+| Restocking fee | 15% only for listed categories (cameras, drones, projectors...) | none listed |
+
+Consequences:
+- **Spec 3.8 is wrong for the Target row.** With a 90-day window, an item ordered ~Oct 22
+  closes ~Jan 20, so it never "closes soon". The seed now orders it **Aug 24** (window ends
+  Nov 22). Pick a real Target item bought in late August, or a category with a shorter
+  window (check its product page).
+- **The schema can't hold holiday end dates.** Both stores' holiday rules are fixed dates,
+  not "N days". We seed the shorter standard windows: Clawback may stop early, never late.
+  Ask A for an optional `holiday_window_end DATE` (or `adjust_window_end_override`) column if
+  we want to claim the holiday extension.
+- **Best Buy's own-price window equals its return window** (from delivery), so
+  adjust_window_starts = delivery.
+- The Target return pages don't say whether the window counts from purchase or delivery.
+  Confirm with Target chat or the receipt.
+- The adjust question now reads "Does X adjust or match a lower price after purchase…",
+  because stores call it a price match. The local matcher also maps a few synonyms
+  (begins→start, period→window, receive→delivery).
+- **Result:** with the real text, `run_demo` gives Best Buy "not worth it: you'd only save $6"
+  (R8) and Target "Return closes soon: last day 2026-11-22". Preflight `--warm` has no FAIL
+  lines; only the LLM is a WARN.
+- **Still placeholders:** the two real items (title, SKU, UPC, model number, colour, price).
+
 ## Things in the team spec that looked wrong or unclear
 
 1. **Spec location:** the prompt said `docs/clawback-team-split.md`; the file is at the repo
@@ -235,7 +272,7 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
 8. **No `user_id` on orders.** B assumes one user (`CLAWBACK_USER_ID`, default `u_demo`).
 9. **`send_email` has no opportunity_id**, but `messages.opportunity_id` exists. B looks it up
    via `proposals.proposal_hash`, so proposals must be saved before the actor runs (they are).
-10. **Real-store policy values are placeholders** in the seed stub: Target return 30 days from
+10. ~~Real-store policy values are placeholders~~ (now from the official pages, see above). Was: in the seed stub: Target return 30 days from
     delivery (chosen so the alert fires); Best Buy adjust 15 days from purchase, return 15 days
     from delivery. **Confirm from the official pages.** If Target's real return window is
     longer, the "Return closes soon" seed item needs a different purchase date.

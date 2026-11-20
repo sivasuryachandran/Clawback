@@ -31,6 +31,12 @@
 - A: does `db.execute` return lastrowid for INSERT? Mock store `support_domains` is `[]`, so live mode fails R10. Confirm the real-store policy values.
 - C: `/mock/support` should show the plain sentence, not JSON. `/mock/policy` must exist (it's the Why? source link).
 
+## Real-store facts (bestbuy.com / target.com, read 2026-11-19)
+
+- **Best Buy:** chat; own price drops matched during the return period; standard return 15 days from receipt; holiday purchases (Oct 30 – Dec 31) run through Jan 15, 2027; competitors only at the time of sale; clearance excluded.
+- **Target:** chat; own prices, 14 days from purchase (holiday: purchases Nov 1 – Dec 24, lower price by Dec 24); returns 90 days for most items, start not stated; clearance excluded.
+- The "return closes soon" Target item must be bought about **88 days** before demo day, not ~Oct 22.
+
 ## Day-of run order
 
 1. Start the server.

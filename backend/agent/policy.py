@@ -44,7 +44,9 @@ def question_for(opp: dict, item: dict, policy: dict | None, action: str | None 
     finals = json.loads(policy["final_sale_categories"]) if policy and isinstance(
         policy["final_sale_categories"], str) else (policy or {}).get("final_sale_categories") or []
     cat = item["category"]
-    adjust_q = f"Does {name} adjust prices after purchase for {cat} items, and for how long?"
+    # Stores word this as a "price match" of a "lower price", so ask it that way.
+    adjust_q = (f"Does {name} adjust or match a lower price after purchase for {cat} items, "
+                "and for how long?")
     return_q = f"How long is the {name} return window for {cat} items, and when does it start?"
     if cat in finals:
         return f"Is {cat} final sale at {name}?"

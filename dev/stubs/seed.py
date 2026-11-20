@@ -20,7 +20,9 @@ ROWS = [
     ("fan", "mockstore", "MS-55024", "Breeze Desk Fan", "MS-4004", None, "Gray", "clearance", 59.00, 10, 8),
     # PLACEHOLDER real-store items: replace with the items picked before kickoff.
     ("bestbuy", "bestbuy", "BBY01-PLACEHOLDER", "PLACEHOLDER Best Buy item", "BB-PLACEHOLDER", "000000000001", "Standard", "electronics", 49.99, 6, 4),
-    ("target", "target", "TGT-PLACEHOLDER", "PLACEHOLDER Target item", "TG-PLACEHOLDER", "000000000002", "Standard", "home", 29.99, 29, 27),
+    # Target's window is 90 days (target.com/returns), so the "closes soon" item must be
+    # ordered ~88 days before demo day (Aug 24 for Nov 20), NOT ~Oct 22 as spec 3.8 says.
+    ("target", "target", "TGT-PLACEHOLDER", "PLACEHOLDER Target item", "TG-PLACEHOLDER", "000000000002", "Standard", "home", 29.99, 88, 86),
 ]
 
 # key -> (listing variant to match, latest price, minutes since seen)
@@ -37,11 +39,18 @@ POLICIES = [
     # store, channel, adjust_allowed, competitor, adj_days, adj_starts, ret_days, ret_starts,
     # final_sale, restock_pct, ret_ship, support_domains
     ("mockstore", "email", 1, 0, 14, "purchase", 30, "delivery", ["clearance"], 0.0, 0.0, [], "local:mockstore"),
-    # PLACEHOLDER values: spec 3.8 gives Target chat / own prices only / 14-day adjust window.
-    # Return window (30 from delivery) is a placeholder chosen so the alert fires; CONFIRM.
-    ("target", "chat", 1, 0, 14, "purchase", 30, "delivery", [], 0.0, 0.0, ["target.com"], "local:target"),
-    # PLACEHOLDER values: Best Buy price-match period and start are UNCONFIRMED (spec says confirm).
-    ("bestbuy", "chat", 1, 0, 15, "purchase", 15, "delivery", [], 0.0, 0.0, ["bestbuy.com"], "local:bestbuy"),
+    # From target.com, read 2026-11-19 (seed/policies/target.md):
+    #  adjust: own prices only, 14 days from purchase (standard; the holiday rule for purchases
+    #    Nov 1 - Dec 24 can't be expressed as days, so the shorter standard window is used);
+    #  return: 90 days for most items; start NOT stated on the page -> "purchase" (shorter, safer);
+    #  clearance can't be price matched; claims go through chat.
+    ("target", "chat", 1, 0, 14, "purchase", 90, "purchase", ["clearance"], 0.0, 0.0, ["target.com"], "local:target"),
+    # From bestbuy.com, read 2026-11-19 (seed/policies/bestbuy.md):
+    #  own price drops are matched during the return period; competitors only at time of sale;
+    #  return: standard 15 days from the day you receive it (holiday: purchases Oct 30 - Dec 31
+    #  run through Jan 15, 2027 - not expressible as days, standard used); clearance excluded;
+    #  restocking fee only for listed categories (cameras, drones, projectors...), 0 here.
+    ("bestbuy", "chat", 1, 0, 15, "delivery", 15, "delivery", ["clearance"], 0.0, 0.0, ["bestbuy.com"], "local:bestbuy"),
 ]
 
 

@@ -102,7 +102,7 @@ def run_checks(http=None, live: bool = False, warm: bool = False) -> list[tuple[
     except Exception:
         stores = list(STORE_NAMES)
     for store in stores:
-        q = f"Does {STORE_NAMES.get(store, store)} adjust prices after purchase, and for how long?"
+        q = f"Does {STORE_NAMES.get(store, store)} adjust or match a lower price after purchase, and for how long?"
         t = time.time()
         try:
             r = _ask_with_timeout(store, q)
