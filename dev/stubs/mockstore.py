@@ -32,10 +32,16 @@ def listings():
 class RebuyIn(BaseModel):
     listing_id: int
     original_order_no: str
+    idempotency_key: str | None = None   # same as C's real store: same key -> same result
+
+
+_IDEM: dict[str, dict] = {}
 
 
 @router.post("/api/rebuy_return")
 def rebuy_return(body: RebuyIn):
+    if body.idempotency_key and body.idempotency_key in _IDEM:
+        return dict(_IDEM[body.idempotency_key], replayed=True)
     # Validate everything before doing anything, so it's both or neither.
     l = db.query("SELECT * FROM listings WHERE id = %s AND store = 'mockstore'", (body.listing_id,))
     o = db.query("SELECT * FROM orders WHERE order_no = %s AND store = 'mockstore'",
@@ -47,6 +53,8 @@ def rebuy_return(body: RebuyIn):
            "listing_id": body.listing_id, "original_order_no": body.original_order_no,
            "at": clock.ts()}
     CALLS.append(res)
+    if body.idempotency_key:
+        _IDEM[body.idempotency_key] = res
     return res
 
 

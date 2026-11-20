@@ -2,9 +2,14 @@
 
     uvicorn dev.app:app --port 8000
 """
+import sys
+
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env only when serving: under pytest it leaked a developer's DEMO_* settings into
+# everyone else's tests (seen as test_context expecting support@mockstore.test).
+if "pytest" not in sys.modules:
+    load_dotenv()
 
 from fastapi import FastAPI  # noqa: E402
 

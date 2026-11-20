@@ -44,6 +44,7 @@ def fresh_world(policy_dir: str = "tests/fixtures/policies"):
         set_llm(RuleBasedLLM())
         set_policy_source(LocalPolicySource(policy_dir))
         mockstore.CALLS.clear()
+        mockstore._IDEM.clear()
         outbox = Path(f"{tmp}/outbox")
 
         class W:
