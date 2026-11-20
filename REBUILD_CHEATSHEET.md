@@ -1,4 +1,8 @@
-# Teammate B: rebuild cheat sheet (bring this; leave the code)
+# Teammate B: event cheat sheet (start from branch `teammate-b-rehearsal`)
+
+The rehearsal code is used directly: delete `dev/stubs/` once the teammates' modules land
+(`backend/agent/deps.py` switches over by itself), then use the build order below as the
+checklist of what each piece must do.
 
 ## Build order (code freeze 4:10 PM)
 

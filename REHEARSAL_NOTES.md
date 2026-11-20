@@ -1,7 +1,8 @@
 # Clawback rehearsal notes: Teammate B (agent, policy, actions)
 
 Rehearsal on 2026-11-19, run **fully local** (no Senso, Airbyte, Anthropic or Firedrill calls).
-This file is what comes to the event; the code stays home.
+The code on branch `teammate-b-rehearsal` is the starting point for B's part at the event;
+this file explains what it does, what was learned, and what is still open.
 
 ## Results
 
