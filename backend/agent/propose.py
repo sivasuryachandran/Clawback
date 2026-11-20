@@ -9,7 +9,7 @@ import os
 from datetime import date, timedelta
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from backend.agent import clock
 from backend.agent.deps import db, pact, track
@@ -25,6 +25,16 @@ TEMPLATE_FOR = {"price_adjust_email": "price_adjust_v1", "claim_packet": "packet
 
 # ---------- schemas ----------
 
+NULL_WORDS = {"", "none", "null", "n/a", "na", "nil", "undefined"}
+
+
+def null_words_to_none(v):
+    """Some open-weight models write the STRING "None" for an unused optional field."""
+    if isinstance(v, str) and v.strip().lower() in NULL_WORDS:
+        return None
+    return v
+
+
 class LLMChoice(BaseModel):
     """What the LLM is allowed to decide. Extra keys (e.g. a listing_id or price) are DROPPED."""
     model_config = ConfigDict(extra="ignore")
@@ -32,6 +42,8 @@ class LLMChoice(BaseModel):
     template: Optional[Template] = None
     alert_at: Optional[date] = None
     reasoning: str = Field(min_length=1, max_length=600)
+
+    _null_words = field_validator("template", "alert_at", mode="before")(null_words_to_none)
 
     @model_validator(mode="after")
     def _consistent(self):
