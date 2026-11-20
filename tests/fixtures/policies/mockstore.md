@@ -1,4 +1,4 @@
-Source: http://localhost:8000/mock/policy
+Source: /mock/policy
 
 # Mock Store policy
 

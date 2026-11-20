@@ -44,16 +44,28 @@ def amount_usd(p: dict) -> float:
 
 
 def run_action(d, p: dict) -> str:
+    """The one actor entry point. STABLE: Siva's POST /approvals/{id} calls run_action(decision,
+    proposal) too, so the item's status is set HERE (after the outside action succeeded), which
+    keeps the card truthful on both paths. Raises only BEFORE the outside effect."""
     a = p["action_type"]
     if a in ("price_adjust_email", "claim_followup"):
-        return "message " + send_template(d, p)
-    if a == "claim_packet":
-        return f"claim_packet {build_claim_packet(d, p['opportunity_id'])}"
-    if a == "rebuy_return":
-        return rebuy_return(d, p["rebuy"]["listing_id"], p["return"]["order_no"])
-    if a == "deadline_alert":
-        return f"alert on {p['alert_at']}"  # in-app only; nothing leaves the building
-    raise ValueError(f"no actor for {a}")
+        out = "message " + send_template(d, p)
+    elif a == "claim_packet":
+        out = f"claim_packet {build_claim_packet(d, p['opportunity_id'])}"
+    elif a == "rebuy_return":
+        # Never pay more than the gate approved (the DB's latest price).
+        out = rebuy_return(d, p["rebuy"]["listing_id"], p["return"]["order_no"],
+                           max_price_usd=amount_usd(p))
+    elif a == "deadline_alert":
+        out = f"alert on {p['alert_at']}"  # in-app only; nothing leaves the building
+    else:
+        raise ValueError(f"no actor for {a}")
+    if a in STATUS_ON_ALLOW:
+        try:
+            _set_status(p, STATUS_ON_ALLOW[a])
+        except Exception:
+            pass  # the action happened; a status write must never turn it into "failed"
+    return out
 
 
 def _set_status(p: dict, status: str) -> None:

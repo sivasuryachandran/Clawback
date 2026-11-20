@@ -22,6 +22,14 @@ class PolicySource(Protocol):
     def ask(self, store: str, question: str) -> dict: ...
 
 
+def absolute_url(url: str | None) -> str | None:
+    """The mock store's policy lives on OUR server, whose port differs by setup (8000 rehearsal,
+    8001 integrated): a policy file may say `Source: /mock/policy`, resolved here."""
+    if url and url.startswith("/"):
+        return os.environ.get("CLAWBACK_BASE_URL", "http://localhost:8000").rstrip("/") + url
+    return url
+
+
 def _no_source(answer: str) -> dict:
     return {"answer": answer, "cited_text": None, "source_url": None, "source_id": None,
             "revision": None}
@@ -87,7 +95,7 @@ class LocalPolicySource:
         best = max(scored)
         if best[0] == 0:
             return _no_source("No matching sentence in the policy.")
-        return {"answer": best[2], "cited_text": best[2], "source_url": best[3],
+        return {"answer": best[2], "cited_text": best[2], "source_url": absolute_url(best[3]),
                 "source_id": f"local:{store}", "revision": revision}
 
 
@@ -157,7 +165,7 @@ class SensoPolicySource:
                      for s in re.split(r"(?<=[.!?])\s+", ln) if s.strip(" -*")]
         quote = max(sentences, key=lambda s: len(q & _stems(s, drop))) if sentences else best["chunk_text"]
         meta = ids[best["content_id"]]
-        return {"answer": quote, "cited_text": quote, "source_url": meta.get("source_url"),
+        return {"answer": quote, "cited_text": quote, "source_url": absolute_url(meta.get("source_url")),
                 "source_id": f"senso:{best['content_id']}",
                 "revision": best.get("version_id")}
 
