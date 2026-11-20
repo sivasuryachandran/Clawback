@@ -67,6 +67,19 @@ def act_on(p: dict, the_pact: dict, d, *, source: str = "propose") -> dict:
     out = {"proposal_id": p["proposal_id"], "action_type": p["action_type"],
            "decision": d.decision, "failed_rule": rule, "values": values, "audit_id": audit_id}
     amount = amount_usd(p)
+    ran = db.query("SELECT status FROM executed_actions WHERE proposal_hash = %s",
+                   (d.proposal_hash,)) if d.proposal_hash else []
+    if d.decision != "ALLOW" and ran and ran[0]["status"] in ("running", "done"):
+        # A repeat of something that already happened (double click, two tabs, a retry
+        # racing the first run). The gate rightly says no (R11 / A1 / R9 counting the
+        # running one), but the card must keep saying what DID happen, not "Stopped".
+        out.update(status="already_ran", result="it already happened; nothing was done again")
+        db.execute("UPDATE audit_log SET action_result = %s WHERE id = %s",
+                   (json.dumps({"status": "already_ran", "duplicate_of": d.proposal_hash}), audit_id))
+        track("gate_decision", {"source": source, "opportunity_id": p["opportunity_id"],
+                                "action_type": p["action_type"], "decision": d.decision,
+                                "failed_rule": rule, "amount_usd": amount, "duplicate": True})
+        return out
     if d.decision == "ALLOW":
         conn = db.connection()
         try:
@@ -81,7 +94,10 @@ def act_on(p: dict, the_pact: dict, d, *, source: str = "propose") -> dict:
         if status == "done" and p["action_type"] in STATUS_ON_ALLOW:
             _set_status(p, STATUS_ON_ALLOW[p["action_type"]])
     elif d.decision == "ASK":
-        aid = db.execute(
+        # One open approval per proposal: asking again must not create a second card.
+        open_ = db.query("SELECT id FROM approvals WHERE proposal_hash = %s AND status IN "
+                         "('pending','approved') ORDER BY id LIMIT 1", (d.proposal_hash,))
+        aid = open_[0]["id"] if open_ else db.execute(
             "INSERT INTO approvals (proposal_id, proposal_hash, user_id, amount_usd, status, "
             "expires_at) VALUES (%s,%s,%s,%s,%s,%s)",
             (p["proposal_id"], d.proposal_hash, USER_ID, amount, "pending",
@@ -151,7 +167,9 @@ def opportunity_view(opportunity_id: int):
         t["action_status"] = res.get("status")
         if res.get("status") == "failed":  # allowed, but the actor failed: say so plainly
             t["status_words"], t["plain"] = words.FAILED_WORDS, words.ERROR_SENTENCE
-    main = [t for t in trail if t["action_type"] != "claim_followup"]
+    # Headline = the latest attempt that wasn't just a repeat of something already done.
+    main = [t for t in trail if t["action_type"] != "claim_followup"
+            and t["action_status"] != "already_ran"]
     latest = main[-1] if main else None
     msgs = db.query("SELECT direction, thread_id, to_addr, subject, body, sent_at FROM messages "
                     "WHERE opportunity_id = %s ORDER BY id", (opportunity_id,))

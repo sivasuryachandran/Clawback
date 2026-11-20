@@ -652,3 +652,50 @@ def test_failed_followup_is_not_counted(env, monkeypatch):
         assert _reply(env, f"Please send proof ({i})", t)["status"] == "done"
     assert _reply(env, "Please send proof again", t)["failed_rule"] == "R13"
     assert q("SELECT status FROM line_items WHERE sku = 'MS-1001'")[0]["status"] == "asked_store"
+
+
+# ---------- double clicks keep the card truthful (found in the live click-through) ----------
+
+def _card(env, key):
+    v = env.client.get(f"/opportunities/{env.ids[key]}").json()
+    return v["status"], v["decision_words"]
+
+
+def test_double_propose_keeps_card_done(env):
+    env.propose("earbuds")
+    second = env.propose("earbuds")
+    assert (second["decision"], second["status"]) == ("BLOCK", "already_ran")
+    assert _card(env, "earbuds") == ("asked_store", "Done")
+    assert len(env.emails()) == 1
+
+
+def test_double_approve_keeps_card_done(env):
+    env.propose("lamp")
+    [ap] = q("SELECT * FROM approvals")
+    env.client.post(f"/dev/approve/{ap['id']}")
+    second = env.client.post(f"/dev/approve/{ap['id']}").json()
+    assert second["status"] == "already_ran"
+    assert _card(env, "lamp") == ("rebought", "Done")
+    assert len(env.calls) == 1
+
+
+def test_approve_racing_a_running_rebuy_is_not_shown_as_stopped(env):
+    """Two simultaneous clicks: click 1 is mid-rebuy (row 'running') when click 2 is gated.
+    The stand-in gate counts the running $199 in the monthly cap, so click 2 gets R9."""
+    from dev.stubs import db
+    env.propose("lamp")
+    [ap] = q("SELECT * FROM approvals")
+    db.execute("INSERT INTO executed_actions (proposal_hash, line_item_id, action_type, amount_usd, "
+               "status, result, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+               (ap["proposal_hash"], q("SELECT id FROM line_items WHERE sku='MS-2002'")[0]["id"],
+                "rebuy_return", 199.0, "running", None, "2026-11-20 12:00:00"))
+    r = env.client.post(f"/dev/approve/{ap['id']}").json()
+    assert (r["decision"], r["failed_rule"], r["status"]) == ("BLOCK", "R9", "already_ran")
+    assert q("SELECT status FROM line_items WHERE sku = 'MS-2002'")[0]["status"] == "needs_ok"
+    assert env.calls == []
+
+
+def test_asking_again_reuses_the_open_approval(env):
+    first, second = env.propose("lamp"), env.propose("lamp")
+    assert first["approval_id"] == second["approval_id"]
+    assert len(q("SELECT id FROM approvals")) == 1
