@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from backend.analytics import events
+from backend.analytics import agent_analytics, events, gates
 
 from . import dbaccess as dba
 from . import queries, sample
@@ -294,7 +294,8 @@ def safety_panel() -> dict:
 def analytics_panel(use_sample: bool) -> dict:
     recent = sample.sample_events() if use_sample else events.recent(limit=10)
     return {"status": events.status(), "dashboard_url": os.environ.get("AMPLITUDE_DASHBOARD_URL") or None,
-            "today_counts": events.today_counts(), "recent": recent}
+            "today_counts": events.today_counts(), "recent": recent,
+            "agent_analytics": agent_analytics.status(), "gates": gates.status()}
 
 
 def tests_panel() -> dict:

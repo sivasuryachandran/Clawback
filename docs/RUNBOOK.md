@@ -89,6 +89,17 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
 3. Paste the dashboard's share link in `AMPLITUDE_DASHBOARD_URL` (it shows on Under the hood → Analytics).
 4. Screenshot the dashboard for the submission. (Amplitude alone covers the "Amplitude or Statsig" prize.)
 
+## Optional: Statsig gate + Amplitude Agent Analytics (both are no-ops without their keys)
+
+1. Statsig: create a project, copy the **Server Secret Key** (API keys page) into `STATSIG_SERVER_SECRET`. Create a Feature Gate named `proposal_prompt_v2`,
+   add a rule (e.g. pass for a teammate's user id, or 100% of `u_demo`) and press **Save**. A new gate stays `false` until a rule is saved.
+2. Agent Analytics: in your Amplitude project turn on Agent Analytics and copy its project API key into `AMPLITUDE_AI_API_KEY` (this is not `AMPLITUDE_API_KEY`).
+3. Check: `python scripts/sponsor_smoke.py` (sends nothing), then `python scripts/sponsor_smoke.py --send` (one tagged test conversation + one gate check).
+   Amplitude never reports a wrong key back, so confirm the `smoke-test` session appears in Agent Analytics. A wrong Statsig secret is reported.
+4. Under the hood → Analytics shows both as on or off.
+5. Teammate B uses them in the proposal step (see docs/C_CONTRACTS.md section 8b). The demo story: put the new prompt/model behind the gate, enable it for
+   a teammate, show the conversations and failures in Agent Analytics, then keep it enabled or switch the gate off.
+
 ## Phone / tunnel (optional; the demo is PC only)
 
 Not needed for the PC demo. If you want a phone anyway: Siva's app talks to the API directly, so both must be reachable (`cloudflared tunnel --url http://localhost:3000` and a second one for

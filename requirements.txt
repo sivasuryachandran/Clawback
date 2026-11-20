@@ -11,3 +11,5 @@ pytest>=8.0
 airbyte-agent-sdk
 sie-sdk; python_version >= "3.12"
 anthropic>=0.40        # Teammate B: only needed when LLM_API_KEY is set
+amplitude-ai          # Part C: Agent Analytics; a no-op without AMPLITUDE_AI_API_KEY
+statsig-python-core    # Part C: feature gates; a no-op without STATSIG_SERVER_SECRET
