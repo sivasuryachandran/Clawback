@@ -10,7 +10,7 @@ Port 8000 was taken on Siva's laptop, so the integrated app runs on **8001** (us
 source .venv/bin/activate
 export CLAWBACK_API_BASE=http://localhost:8001 CLAWBACK_BASE_URL=http://localhost:8001 BACKEND_URL=http://localhost:8001
 uvicorn backend.dev_app:app --port 8001      # until A's database lands; then: uvicorn backend.main:app --port 8001
-python3 frontend/serve.py                    # Siva's app on :3000   (second terminal)
+(cd frontend && python3 serve.py)            # Siva's app on :3000   (second terminal). Start it INSIDE frontend/: it serves the folder it starts in, and from the repo root it would list .env
 python scripts/preflight.py                  # checklist; run it before every rehearsal
 pytest -q                                    # writes .pytest_last.json for the Tests panel
 python -m backend.analytics.events           # sends one test event to Amplitude
@@ -104,14 +104,15 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
 5. Teammate B uses them in the proposal step (see docs/C_CONTRACTS.md section 8b). The demo story: put the new prompt/model behind the gate, enable it for
    a teammate, show the conversations and failures in Agent Analytics, then keep it enabled or switch the gate off.
 
-## Start Airbyte on the demo laptop (only if a real Gmail read/send will run live)
+## Airbyte (read path only: Siva runs the sync, B's reader brings it into the database)
 
-1. Install once: `curl -LsfS https://get.airbyte.com | bash -`  (installs `abctl`).
-2. Start it: `abctl local install --port 8100`  (first run takes several minutes; needs Docker running).
-3. Open the UI at http://localhost:8100 and sign in with the credentials `abctl local credentials` prints.
-4. Connect the Gmail source to the demo inbox (the support inbox and the demo user's address are the only recipients allowed).
-5. Teammate B's `dev/airbyte_send_check.py` refuses to send unless the demo safety checks hold; run it once before the recording.
-6. Do all of this before the freeze: if it is not working by 3:30 PM, drop Airbyte from the README and demo with the file outbox.
+Airbyte Core syncs a source into a destination; it does not send email, and Cloud signups are closed. So the Airbyte story is **read only**, and only if it really ran.
+
+1. Siva starts Airbyte on the demo laptop: `abctl local install --port 8100` (UI at http://localhost:8100; first run takes several minutes and needs Docker).
+2. Source: the dummy receipts (`seed/airbyte_demo/receipts.jsonl`, a File source) or his Gmail connection. Destination: Local JSON (or SQLite / DuckDB / Postgres).
+3. Put the destination in `.env` on the demo laptop: `AIRBYTE_CORE_DEST=jsonl:/path/to/folder` (or `sqlite:/path/file.db`, `postgresql://user:pw@localhost/db`), and `AIRBYTE_CORE_STREAM` if the stream is not called `messages`.
+4. Run `python -m backend.ingest.airbyte_core`. It prints how many emails it read from Airbyte, or says loudly that it fell back to the seed receipts. Only a "read N from Airbyte" line counts as a live Airbyte read.
+5. The README's Airbyte row stays conditional until step 4 has printed that line. If it has not by 3:30 PM, delete the row and the Airbyte words from docs/SUBMISSION.md.
 
 ## Phone / tunnel (optional; the demo is PC only)
 

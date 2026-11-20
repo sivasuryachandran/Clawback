@@ -16,7 +16,7 @@ and email stores on its own is one prompt-injection away from a bad day.
 
 ## How it works
 
-1. **Read receipts.** The Airbyte Gmail agent connector finds order emails; our code stores them in SingleStore.
+1. **Read receipts.** An Airbyte sync moves the order emails into a destination; our code reads them from there and stores them in SingleStore. (Read only: Airbyte does not send anything.)
 2. **Understand them.** A small Arcee model extracts store, item, SKU/UPC, color/size, price and dates.
 3. **Find the current listing.** Superlinked SIE embeds titles, SingleStore vector search finds candidates, SIE reranks them.
    The matcher only *suggests*; it never decides two items are the same.
@@ -101,7 +101,7 @@ pip install -r requirements.txt
 # Use any free port and keep the three URLs equal to it (8000 was taken on one laptop, so 8001 here).
 export CLAWBACK_API_BASE=http://localhost:8001 CLAWBACK_BASE_URL=http://localhost:8001 BACKEND_URL=http://localhost:8001
 uvicorn backend.dev_app:app --port 8001
-python3 frontend/serve.py        # the app on http://localhost:3000   (second terminal)
+(cd frontend && python3 serve.py)   # the app on http://localhost:3000   (second terminal; run it from INSIDE frontend/, it serves the folder it starts in)
 ```
 
 - App: http://localhost:3000 · **Under the hood: http://localhost:8001/under-the-hood/** (served by the API; no second server)
@@ -134,7 +134,7 @@ The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voic
 | **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events (`[confirm after the demo run that the dashboard shows them]`) |
 | **Real only once it has run live** | SingleStore, Persona (sandbox), Arcee and Senso. `[Tick each one after it ran live in the recording; delete any that did not.]` |
 | **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); offline vector and parser fallbacks; the in-memory stand-in database when SingleStore is not connected |
-| **Airbyte** | Claimed only if a real Gmail read or send ran live in the recording. `[Keep or delete.]` |
+| **Airbyte** | Read path only. Counts only if a real Airbyte sync ran and `python -m backend.ingest.airbyte_core` read its output into the database before the freeze. The seed receipts are dummy purchases, so the Gmail link itself is simulated. Nothing is sent through Airbyte. `[Keep only if it ran; otherwise delete this row.]` |
 | **Not claimed** | Superlinked, Firedrill and Guild are not part of this submission |
 
 The signing helpers (`backend/pact/sign.py`) and the sphere visuals (`frontend/orb.js`) were adapted from Siva's earlier Pact project.
