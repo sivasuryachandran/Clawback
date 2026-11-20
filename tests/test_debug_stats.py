@@ -179,7 +179,9 @@ def test_matching_panel_in_sample_mode_ranks_blue_first_but_not_exact(sample_db)
     assert "DOT_PRODUCT" in m["sql"] and len(m["items"]) == 6
 
 
-def test_matching_panel_reports_a_missing_matcher_instead_of_inventing_results(sample_db):
+def test_matching_panel_reports_a_missing_matcher_instead_of_inventing_results(sample_db, monkeypatch):
+    real_lookup = overview._lookup          # A's real matcher exists now: simulate it being absent
+    monkeypatch.setattr(overview, "_lookup", lambda names, attr: None if attr == "match" else real_lookup(names, attr))
     out = overview._panel(lambda: overview.matching_candidates(1, use_sample=False))
     assert out["available"] is False and "matcher" in out["error"]
 

@@ -7,7 +7,11 @@ Assumption to confirm with Siva: backend/pact/__init__.py re-exports the 3.4 fun
 (active_pact, build_context, run_gate, run_approved, execute_once, record, proposal_hash)
 and AlreadyRan.
 """
+import os
+_STUBS = os.environ.get("CLAWBACK_USE_STUBS") == "1"   # B's tests: the stub db and stub gate are one consistent pair
 try:
+    if _STUBS:
+        raise ImportError("stubs requested")
     from backend import db  # type: ignore[attr-defined]  # A
 except ImportError:
     from dev.stubs import db  # noqa: F401
