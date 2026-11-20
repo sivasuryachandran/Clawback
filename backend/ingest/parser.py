@@ -143,26 +143,28 @@ def parse_email(raw_email_id: int) -> dict:
 
     started = time.monotonic()
     parsed, usage = None, {}
-    parser_used = "Arcee" if ARCEE_API_KEY else "offline regex fallback"
-    for _attempt in range(2):
-        try:
-            if ARCEE_API_KEY:
+    parser_used = "offline regex fallback"
+    if ARCEE_API_KEY:
+        for _attempt in range(2):
+            try:
                 parsed, usage = _call_arcee(body)
-            else:
-                parsed = _fallback_parse(body)
-            if parsed and parsed.get("items"):
-                break
-        except Exception:
-            parsed, usage = None, {}
-    if not parsed:
-        parsed = {"store": "other", "order_no": None, "order_date": None, "delivery_date": None, "items": []}
-        parser_used += " (both attempts failed)" if ARCEE_API_KEY else ""
+                if parsed and parsed.get("items"):
+                    parser_used = "Arcee"
+                    break
+            except Exception:
+                parsed, usage = None, {}
+    if not parsed or not parsed.get("items"):
+        # Arcee unset, or it failed both attempts (e.g. no credits -- 402): the rule-based
+        # parser is the fallback, not giving up with an empty parse.
+        parsed = _fallback_parse(body)
+        usage = {}
+        parser_used = "offline regex fallback" + (" (Arcee failed both attempts)" if ARCEE_API_KEY else "")
     latency_ms = int((time.monotonic() - started) * 1000)
     tokens = usage.get("total_tokens")
     cost_usd = _arcee_cost_usd(usage) if usage else 0.0
     print(
         f"[parser] raw_email={raw_email_id} via {parser_used} "
-        f"(model={ARCEE_MODEL if ARCEE_API_KEY else 'n/a'}, tokens={tokens}, "
+        f"(model={ARCEE_MODEL if parser_used == 'Arcee' else 'n/a'}, tokens={tokens}, "
         f"latency_ms={latency_ms}, cost_usd={cost_usd})"
     )
 
@@ -191,7 +193,7 @@ def parse_email(raw_email_id: int) -> dict:
         track(
             "receipt_parsed",
             {
-                "model": ARCEE_MODEL if ARCEE_API_KEY else "offline-regex",
+                "model": ARCEE_MODEL if parser_used == "Arcee" else "offline-regex",
                 "tokens": tokens,
                 "latency_ms": latency_ms,
                 "confidence": item.get("confidence", 0.0),
