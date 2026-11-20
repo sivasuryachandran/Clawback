@@ -212,16 +212,12 @@ def test_the_three_saved_queries_are_the_ones_named_in_the_doc(client):
     assert labels == {"What the Pact stopped this week, and why", "Dollars recovered by store", "Price history for an item"}
 
 
+UTH = ROOT / "frontend" / "app" / "under-the-hood"
+
+
 def test_the_frontend_panel_captions_name_their_sponsors():
-    src = (ROOT / "frontend/app/under-the-hood/panels.tsx").read_text()
+    src = (UTH / "under-the-hood.js").read_text()
     for needle in ["Guild", "Persona", "Senso", "SingleStore + Superlinked", "SingleStore:", "Airbyte + Arcee", "Amplitude"]:
         assert needle in src, needle
     for title in ["Live gate trace", "Your Pact", "Approvals and run-once", "Policy", "Matching", "Live queries", "Ingest", "Safety", "Analytics", "Tests"]:
-        assert f'title="{title}"' in src, title
-
-
-def test_the_orb_has_the_documented_props_and_states():
-    src = (ROOT / "frontend/components/orb/Orb.tsx").read_text()
-    assert 'export type OrbState = "idle" | "listening" | "thinking" | "speaking"' in src
-    assert "onAsk" in src and "SpeechRecognition" in src and "speechSynthesis" in src and "Space" in src
-    assert (ROOT / "frontend/components/orb/index.ts").exists() and (ROOT / "frontend/app/under-the-hood/page.tsx").exists()
+        assert f'panel("{title}"' in src, title

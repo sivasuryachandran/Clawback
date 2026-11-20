@@ -1,7 +1,7 @@
 """Clawback API shell (Teammate C owns this file).
 
-Run:   uvicorn backend.main:app --reload --port 8000
-Serves the API, the Mock Store under /mock, and /health.
+Run:   uvicorn backend.main:app --port 8001      (or backend.dev_app:app until A's database lands; no --reload: the Mock Store keeps prices in memory)
+Serves the API, the Mock Store under /mock, the Under the hood page at /under-the-hood/, and /health.
 
 HOW TEAMMATES PLUG IN (section 1: "everyone may add one include_router line"):
 add ONE line to ROUTER_MODULES below naming the module that exposes `router` (an APIRouter).
@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -22,6 +23,7 @@ load_dotenv()  # before anything reads os.environ (PACT_SIGNING_KEY etc. are rea
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from backend.debug import guard  # noqa: E402
 
@@ -149,3 +151,10 @@ def demo_mode_on() -> bool:
 @app.get("/health", tags=["meta"])
 def health():
     return {"status": "ok", "demo_mode": demo_mode_on(), "routers": MOUNTED, "route_conflicts": find_route_conflicts(ROUTERS)}
+
+
+# The judges' page: plain static files served by the API itself at /under-the-hood/ (same origin as /debug/*, so no
+# CORS and no port to configure). Siva's footer link points here; the page's data calls are laptop-only (see guard.py).
+_UNDER_THE_HOOD = Path(__file__).resolve().parents[1] / "frontend" / "app" / "under-the-hood"
+if _UNDER_THE_HOOD.is_dir():
+    app.mount("/under-the-hood", StaticFiles(directory=str(_UNDER_THE_HOOD), html=True), name="under-the-hood")

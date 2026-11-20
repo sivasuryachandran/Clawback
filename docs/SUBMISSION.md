@@ -28,13 +28,13 @@ whose removal would not break something visible in the demo.)*
 | Team | Siva Surya Chandran, `[Teammate A]`, `[Teammate B]`, `[Teammate C]` |
 | Emails | `[...]` |
 | Screenshot | a "Stopped by your rules" card with its Why? panel open |
-| Tools used | Airbyte (Gmail agent connector), SingleStore, Superlinked SIE, Senso, Persona (sandbox), Arcee, Amplitude, `[Firedrill if kept]` |
+| Tools used | Airbyte (Gmail agent connector), SingleStore, Superlinked SIE, Senso, Persona (sandbox), Arcee, Amplitude, an LLM API for proposals, `[Firedrill if kept]` |
 
 ## Numbers to fill in at 4:00
 
 - Dollars recovered in the demo run: `$___` (target: $34 claim + $40 lamp = $74)
 - Unsafe actions stopped: `___` (target: 3 in the main demo)
-- `pytest -q`: `___ passed` (Part C alone: 351)
+- `pytest -q`: `___ passed` (whole suite; fill in at 4:00)
 - Receipts parsed / average cost per receipt (Under the hood → Ingest): `___` / `$___`
 
 ## Honest scope (for the README and Q&A)

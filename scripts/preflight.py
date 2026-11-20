@@ -1,7 +1,7 @@
 """Preflight for Teammate C: run before the dry run and again before recording.
 
-    python scripts/preflight.py            # checks the API on :8000
-    python scripts/preflight.py http://localhost:8000
+    python scripts/preflight.py                         # checks CLAWBACK_API_BASE / BACKEND_URL, default http://localhost:8001
+    python scripts/preflight.py http://localhost:8001
 
 Prints a checklist. It only says whether a secret is SET, never what it is. Exit code 1 if a hard
 check fails (demo safety, API down, mock store wrong), 0 otherwise (warnings are for you to read).
@@ -19,7 +19,7 @@ try:
 except Exception:
     pass
 
-API = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("BACKEND_URL") or "http://localhost:8000").rstrip("/")
+API = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("CLAWBACK_API_BASE") or os.environ.get("BACKEND_URL") or "http://localhost:8001").rstrip("/")
 HARD, SOFT = [], []
 
 
@@ -66,7 +66,7 @@ try:
         row(state == "mounted", f"router {name}", state, hard=name.startswith("mockstore") or ".analytics." in name or ".debug." in name or ".voice." in name)
 except Exception as e:
     row(False, "API answers /health", f"{type(e).__name__}: {e}")
-    print("\nStart it with:  uvicorn backend.main:app --reload --port 8000\n")
+    print("\nStart it with:  uvicorn backend.dev_app:app --port 8001   (no --reload: the Mock Store's prices live in memory)\n")
     sys.exit(1)
 
 print("\nMock store")
@@ -80,6 +80,9 @@ try:
     row(last is None or last["ok"], "last price webhook was delivered", "none sent yet" if last is None else f'status {last["status"]}', hard=False)
     order = get("/mock/api/orders/MS-55021").json()
     row(order["items"][0]["price_paid"] == 239.0, "lamp order MS-55021 exists (return target)")
+    row(get("/mock/api/orders/MS-55001").status_code == 200, "earbuds order MS-55001 exists (Siva's seed number)")
+    page = get("/under-the-hood/")
+    row(page.status_code == 200 and "Under the hood" in page.text, "Under the hood page is served at /under-the-hood/")
 except Exception as e:
     row(False, "mock store", f"{type(e).__name__}: {e}")
 

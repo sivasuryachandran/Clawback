@@ -51,11 +51,11 @@ EARBUDS_ID = 1   # the live drop on stage (section "90-second script", 25-45 s)
 SEED_ORDERS = [
     dict(order_no="MS-55021", order_date="2026-11-02", delivery_date="2026-11-04",
          items=[dict(listing_id=2, qty=1, price_paid="239.00")]),
-    dict(order_no="MS-55029", order_date="2026-11-10", delivery_date="2026-11-12",
+    dict(order_no="MS-55041", order_date="2026-11-10", delivery_date="2026-11-12",
          items=[dict(listing_id=5, qty=1, price_paid="59.00")]),
-    dict(order_no="MS-55034", order_date="2026-11-11", delivery_date="2026-11-13",
+    dict(order_no="MS-55001", order_date="2026-11-11", delivery_date="2026-11-13",
          items=[dict(listing_id=1, qty=1, price_paid="129.99")]),
-    dict(order_no="MS-55041", order_date="2026-11-12", delivery_date="2026-11-14",
+    dict(order_no="MS-55031", order_date="2026-11-12", delivery_date="2026-11-14",
          items=[dict(listing_id=3, qty=1, price_paid="89.00")]),
 ]
 

@@ -1,13 +1,19 @@
 """Mock Store support desk -> Teammate B's POST /replies/inbound (the "try to fool it" box).
 
 The text typed here is UNTRUSTED. We never interpret it; we forward it verbatim as data and B's
-reply handler decides (the gate then stops anything unsafe, e.g. R13 / R5).
+reply handler decides (the gate then stops anything unsafe, e.g. R13 / R10 / R5).
 
-Payload sent to /replies/inbound (a superset, so B can read whichever names it chose):
-  {"opportunity_id": <int|null>, "thread_id": <str|null>, "reply_text": "...", "text": "...",
-   "from_addr": "support@mockstore.invalid", "source": "mockstore_support"}
-The conversation is the most recent outgoing claim email for the earbuds (SKU MS-1001), looked up
-read-only in the `messages` table. With no claim yet, ids are null and B decides what to do.
+B's endpoint (backend/agent/api.py ReplyIn) REQUIRES all three of these, none of them null:
+  {"opportunity_id": <int>, "reply_text": "...", "thread_id": "<str>"}
+We also send `text`, `from_addr` and `source`, which B ignores.
+
+Which conversation does the text belong to?
+  1. the most recent outgoing claim email on an earbuds opportunity (SKU MS-1001), read-only from `messages`;
+  2. if no claim has gone out yet (the demo's first step), the earbuds opportunity with a placeholder
+     thread id. B's handler then finds no earlier claim, so the gate stops any follow-up (R0 / R10 / R13)
+     and nothing is sent: a visible "Stopped by your rules", never a silent failure;
+  3. if there is no earbuds purchase at all, there is nothing to attach the message to: it is NOT sent and
+     the presenter view says so.
 """
 from __future__ import annotations
 
@@ -57,21 +63,50 @@ def find_claim_thread(sku: str = EARBUDS_SKU) -> dict | None:
         return None
 
 
-def build_payload(text: str, thread: dict | None) -> dict:
-    return dict(opportunity_id=(thread or {}).get("opportunity_id"), thread_id=(thread or {}).get("thread_id"),
-                reply_text=text, text=text, from_addr="support@mockstore.invalid", source="mockstore_support")
+def _earbuds_opportunity(sku: str = EARBUDS_SKU) -> int | None:
+    try:
+        from backend.debug import dbaccess
+        rows = dbaccess.query(
+            "SELECT o.id AS opportunity_id FROM opportunities o JOIN line_items li ON li.id = o.line_item_id "
+            "WHERE li.sku = %s ORDER BY o.id DESC LIMIT 1", (sku,))
+        return int(rows[0]["opportunity_id"]) if rows else None
+    except Exception as exc:
+        log.info("no earbuds opportunity available: %s", exc)
+        return None
 
 
-async def forward(app, text: str, thread: dict | None, transport=None) -> dict:
-    """POST to /replies/inbound inside this same app (no network hop). Never raises."""
-    rec = dict(at=datetime.now(timezone.utc).strftime("%H:%M:%S"), text=text[:300],
-               target=("thread " + str(thread["thread_id"])) if thread and thread.get("thread_id")
-               else ("opportunity %s" % thread["opportunity_id"] if thread else "no claim thread yet"),
-               ok=False, status=None, error=None)
+def resolve_conversation(sku: str = EARBUDS_SKU) -> dict | None:
+    """The conversation a support message is attached to (see the module doc). Always int + str, never null."""
+    claim = find_claim_thread(sku)
+    if claim and claim.get("thread_id") and claim.get("opportunity_id") is not None:
+        return {"opportunity_id": int(claim["opportunity_id"]), "thread_id": str(claim["thread_id"]), "kind": "claim"}
+    opp = _earbuds_opportunity(sku)
+    if opp is None:
+        return None
+    return {"opportunity_id": opp, "thread_id": f"thr_unclaimed_{opp}", "kind": "unclaimed"}
+
+
+def build_payload(text: str, conv: dict) -> dict:
+    return dict(opportunity_id=int(conv["opportunity_id"]), thread_id=str(conv["thread_id"]), reply_text=text, text=text,
+                from_addr="support@mockstore.invalid", source="mockstore_support")
+
+
+async def forward(app, text: str, conv: dict | None, transport=None) -> dict:
+    """POST to /replies/inbound inside this same app (no network hop). Never raises. With no conversation to
+    attach to, nothing is sent and the presenter log says why."""
+    rec = dict(at=datetime.now(timezone.utc).strftime("%H:%M:%S"), text=text[:300], ok=False, status=None, error=None,
+               target=("no conversation" if not conv else
+                       f"thread {conv['thread_id']}" if conv.get("kind") == "claim" else
+                       f"no claim yet (placeholder {conv['thread_id']})"))
+    if conv is None:
+        rec["error"] = "no earbuds purchase in the database yet, so there is nothing to attach this message to; it was not sent"
+        log.warning("support message not forwarded: %s", rec["error"])
+        _messages.appendleft(rec)
+        return rec
     try:
         t = transport or httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=t, base_url="http://clawback.local", timeout=60.0) as c:
-            r = await c.post("/replies/inbound", json=build_payload(text, thread))
+            r = await c.post("/replies/inbound", json=build_payload(text, conv))
         rec["status"] = r.status_code
         rec["ok"] = 200 <= r.status_code < 300
         if not rec["ok"]:

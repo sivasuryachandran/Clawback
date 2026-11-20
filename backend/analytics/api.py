@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from backend.debug import dbaccess, sample
 
-from . import stats
+from . import recovery, stats
 
 router = APIRouter(tags=["stats"])
 
@@ -15,6 +15,8 @@ def get_stats(mock: int = 0):
         if mock:
             with dbaccess.use_override(sample.build().query):
                 return dict(stats.compute(), sample=True)
-        return stats.compute()
+        out = stats.compute()
+        recovery.reconcile()          # report newly finished actions to analytics (throttled, never raises)
+        return out
     except Exception as exc:
         return stats.unavailable(exc)
