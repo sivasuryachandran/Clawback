@@ -64,6 +64,7 @@ class FakeDB(types.ModuleType):
     def __init__(self):
         super().__init__("backend.db")
         self.IS_DEVKIT = True
+        self.IntegrityError = sqlite3.IntegrityError      # names A's code imports from backend.db
         self._new()
 
     def _new(self):
@@ -75,6 +76,10 @@ class FakeDB(types.ModuleType):
     @staticmethod
     def _sql(sql):
         return sql.replace("%s", "?")
+
+    @staticmethod
+    def using_singlestore() -> bool:                       # A's matcher asks which backend it is on
+        return False
 
     def query(self, sql, params=()):
         with _lock:
