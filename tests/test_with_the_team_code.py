@@ -32,6 +32,7 @@ def app(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("team")
     env = dict(os.environ, CLAWBACK_API_BASE=base, CLAWBACK_BASE_URL=base, BACKEND_URL=base, ANALYTICS_LOG="off", MOCK_WEBHOOK_SECRET=SECRET,
                OUTBOX_DIR=str(tmp / "outbox"), INBOX_DIR=str(tmp / "inbox"), LOG_LEVEL="WARNING", PYTHONDONTWRITEBYTECODE="1")
+    env.pop("CLAWBACK_USE_STUBS", None)      # set by tests/conftest.py for B's unit tests; the real stack must not inherit it
     env.pop("PERSONA_API_KEY", None)
     env.pop("LLM_API_KEY", None)
     env.pop("CLAWBACK_USE_STUBS", None)        # tests/conftest.py sets it for the unit tests; the real stack must not inherit it
@@ -167,7 +168,8 @@ def test_money_recovered_reaches_analytics_exactly_once_each(demo):
     why = f"base={base} now={counts} executed={[(e['action_type'], e['created_at']) for e in app.get('/debug/overview').json()['approvals_once']['executed']]}"
     assert money(counts) == 1 and [e["props"]["amount_usd"] for e in recent[:1]] == [34.0], why   # ...the earbuds claim is reported once
     app.post("/mock/api/prestage")
-    assert app.post("/approvals/1", json={"decision": "approve"}).json()["status"] == "done"
+    _r = app.post("/approvals/1", json={"decision": "approve"}).json()
+    assert _r.get("status") == "done", _r
     _poll_stats(app, 3)
     counts, recent = _analytics(app)
     assert money(counts) == 2 and recent[0]["props"]["amount_usd"] == 40.0                  # the lamp adds exactly one more, $40

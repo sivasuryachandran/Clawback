@@ -331,6 +331,7 @@ async function render(keepScroll) {
 }
 function route() { tab = (location.hash || "#money").slice(1); if (!screens[tab]) tab = "money"; render(); }
 addEventListener("hashchange", route);
+{ const u = document.getElementById("uth"); if (u) { u.href = API + "/under-the-hood/"; u.target = "_blank"; u.rel = "noopener"; } }   // C's page is served by the API itself
 const detailBoxes = [$("#details"), $("#details2")];
 detailBoxes.forEach((b) => { b.checked = safeGet("clawback_details") === "1"; b.addEventListener("change", (e) => { detailBoxes.forEach((x) => (x.checked = e.target.checked)); document.body.classList.toggle("details", e.target.checked); safeSet("clawback_details", e.target.checked ? "1" : "0"); }); });
 document.body.classList.toggle("details", $("#details").checked);
