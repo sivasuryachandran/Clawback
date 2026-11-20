@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import email
+import email.utils
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,6 +132,19 @@ def _ingest_from_airbyte() -> int:
     return count
 
 
+def _parse_rfc2822_date(raw: str) -> str:
+    """SingleStore's DATETIME column rejects RFC 2822 ("Wed, 11 Nov 2026 10:00:00 -0800")
+    outright -- SQLite's TEXT column silently accepted it, which is how this went
+    unnoticed until a real SingleStore insert. Falls back to now() if unparseable."""
+    try:
+        dt = email.utils.parsedate_to_datetime(raw)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _ingest_from_seed() -> int:
     if not SEED_DIR.exists():
         return 0
@@ -150,7 +164,7 @@ def _ingest_from_seed() -> int:
             gmail_msg_id=eml_path.stem,
             from_addr=msg.get("From", ""),
             subject=msg.get("Subject", ""),
-            received_at=msg.get("Date", ""),
+            received_at=_parse_rfc2822_date(msg.get("Date", "")),
             body=body,
         ):
             count += 1
