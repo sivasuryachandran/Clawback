@@ -133,8 +133,9 @@ The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voic
 |---|---|
 | **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events (`[confirm after the demo run that the dashboard shows them]`) |
 | **Real only once it has run live** | SingleStore, Persona (sandbox), Arcee and Senso. `[Tick each one after it ran live in the recording; delete any that did not.]` |
-| **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); the in-memory stand-in database when SingleStore is not connected |
-| **Not claimed** | Airbyte, Superlinked, Firedrill and Guild are not part of this submission |
+| **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); offline vector and parser fallbacks; the in-memory stand-in database when SingleStore is not connected |
+| **Airbyte** | Claimed only if a real Gmail read or send ran live in the recording. `[Keep or delete.]` |
+| **Not claimed** | Superlinked, Firedrill and Guild are not part of this submission |
 
 The signing helpers (`backend/pact/sign.py`) and the sphere visuals (`frontend/orb.js`) were adapted from Siva's earlier Pact project.
 Real stores never receive email: they get a claim packet the user submits through the store's chat.

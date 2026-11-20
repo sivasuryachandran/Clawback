@@ -104,6 +104,15 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
 5. Teammate B uses them in the proposal step (see docs/C_CONTRACTS.md section 8b). The demo story: put the new prompt/model behind the gate, enable it for
    a teammate, show the conversations and failures in Agent Analytics, then keep it enabled or switch the gate off.
 
+## Start Airbyte on the demo laptop (only if a real Gmail read/send will run live)
+
+1. Install once: `curl -LsfS https://get.airbyte.com | bash -`  (installs `abctl`).
+2. Start it: `abctl local install --port 8100`  (first run takes several minutes; needs Docker running).
+3. Open the UI at http://localhost:8100 and sign in with the credentials `abctl local credentials` prints.
+4. Connect the Gmail source to the demo inbox (the support inbox and the demo user's address are the only recipients allowed).
+5. Teammate B's `dev/airbyte_send_check.py` refuses to send unless the demo safety checks hold; run it once before the recording.
+6. Do all of this before the freeze: if it is not working by 3:30 PM, drop Airbyte from the README and demo with the file outbox.
+
 ## Phone / tunnel (optional; the demo is PC only)
 
 Not needed for the PC demo. If you want a phone anyway: Siva's app talks to the API directly, so both must be reachable (`cloudflared tunnel --url http://localhost:3000` and a second one for
