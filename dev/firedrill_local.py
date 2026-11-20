@@ -9,6 +9,11 @@ card status), not just the decision label. The pass rate printed is from a real 
 """
 import contextlib
 import os
+
+# Dev tools seed the STAND-IN world (dev/stubs), so they must use the stand-in db + gate pair:
+# with A's backend/db.py present, deps would otherwise pair it with Siva's real gate (no such table: pacts).
+os.environ.setdefault("CLAWBACK_USE_STUBS", "1")
+
 import re
 import sys
 import tempfile
