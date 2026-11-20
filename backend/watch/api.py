@@ -43,71 +43,72 @@ async def price_changed(request: Request):
     return {"opportunity_ids": opp_ids}
 
 
-def _failed_rule(rule_results_json) -> tuple[str | None, dict | None]:
-    if not rule_results_json:
-        return None, None
-    results = rule_results_json if isinstance(rule_results_json, list) else json.loads(rule_results_json)
-    for r in results:
-        if not r.get("pass"):
-            return r.get("rule"), r.get("values")
-    return None, None
-
-
-def _latest_listing_price(listing_id: int) -> tuple[float | None, str | None]:
-    rows = query(
-        "SELECT (SELECT price FROM price_history ph WHERE ph.listing_id=%s ORDER BY seen_at DESC LIMIT 1) AS price, "
-        "(SELECT seen_at FROM price_history ph WHERE ph.listing_id=%s ORDER BY seen_at DESC LIMIT 1) AS seen_at",
-        (listing_id, listing_id),
-    )
-    if not rows:
-        return None, None
-    return rows[0].get("price"), rows[0].get("seen_at")
+def _jsonish(v):
+    """JSON columns may arrive as str or already parsed, depending on the driver."""
+    if v is None:
+        return None
+    return v if isinstance(v, (list, dict)) else json.loads(v)
 
 
 @router.get("/activity")
 def list_activity():
-    """Audit rows joined with the plain fields the UI's Activity screen and Why? panel
-    need (section 3.10): item, paid, found price + seen_at, cited sentence + source, the
-    decision and failed rule with values."""
-    rows = query(
-        """
-        SELECT a.id AS audit_id, a.ts, a.decision, a.rule_results_json, a.proposal_id,
-               a.proposal_hash, p.opportunity_id, p.action_type,
-               li.title, li.variant, li.store AS item_store, li.price_paid,
-               opp.listing_id, opp.drop_usd,
-               pc.cited_text, pc.source_url, pc.fetched_at AS citation_fetched_at
-        FROM audit_log a
-        LEFT JOIN proposals p ON p.id = a.proposal_id
-        LEFT JOIN opportunities opp ON opp.id = p.opportunity_id
-        LEFT JOIN line_items li ON li.id = opp.line_item_id
-        LEFT JOIN policy_checks pc ON pc.opportunity_id = opp.id
-        ORDER BY a.id DESC
-        """,
-        (),
-    )
+    """Field names match backend/pact/devkit.py's activity() exactly -- frontend/app.js
+    and the rest of the team already read these. Newest first."""
     out = []
-    for r in rows:
-        failed_rule, rule_values = _failed_rule(r.get("rule_results_json"))
-        found_price, seen_at = (None, None)
-        if r.get("listing_id"):
-            found_price, seen_at = _latest_listing_price(r["listing_id"])
+    for a in query("SELECT * FROM audit_log ORDER BY id DESC", ()):
+        prop_rows = query("SELECT * FROM proposals WHERE id=%s", (a["proposal_id"],))
+        if not prop_rows:
+            continue
+        prop = prop_rows[0]
+        p = _jsonish(prop["payload_json"]) or {}
+        opp_rows = query("SELECT * FROM opportunities WHERE id=%s", (p.get("opportunity_id", prop.get("opportunity_id")),))
+        if not opp_rows:
+            continue
+        opp = opp_rows[0]
+        it = query(
+            "SELECT li.*, o.order_date, o.order_no FROM line_items li JOIN orders o ON o.id=li.order_id WHERE li.id=%s",
+            (opp["line_item_id"],),
+        )[0]
+        pr = (
+            query(
+                "SELECT price, seen_at FROM price_history WHERE listing_id=%s ORDER BY seen_at DESC LIMIT 1",
+                (opp["listing_id"],),
+            )
+            if opp.get("listing_id")
+            else []
+        )
+        pc = query(
+            "SELECT * FROM policy_checks WHERE opportunity_id=%s ORDER BY id DESC LIMIT 1", (opp["id"],)
+        )
+        results = _jsonish(a.get("rule_results_json")) or []
+        failed = next((r["rule"] for r in results if not r.get("pass")), None)
+        appr = (
+            query("SELECT id FROM approvals WHERE proposal_hash=%s AND status='pending'", (a["proposal_hash"],))
+            if a["decision"] == "ASK"
+            else []
+        )
+        pk = (
+            query("SELECT pact_text FROM pacts WHERE pact_id=%s AND version=%s", (a["pact_id"], a["pact_version"]))
+            if a.get("pact_id")
+            else []
+        )
+        cs = query("SELECT chat_script FROM claim_packets WHERE proposal_hash=%s", (a["proposal_hash"],))
         out.append(
             {
-                "audit_id": r["audit_id"],
-                "ts": r["ts"],
-                "decision": r["decision"],
-                "action_type": r.get("action_type"),
-                "item_title": r.get("title"),
-                "variant": r.get("variant"),
-                "store": r.get("item_store"),
-                "paid": r.get("price_paid"),
-                "found_price": found_price,
-                "seen_at": seen_at,
-                "drop_usd": r.get("drop_usd"),
-                "cited_text": r.get("cited_text"),
-                "source_url": r.get("source_url"),
-                "failed_rule": failed_rule,
-                "rule_values": rule_values,
+                "audit_id": a["id"], "ts": a["ts"], "opportunity_id": opp["id"], "line_item_id": it["id"],
+                "proposal_id": p.get("proposal_id", prop["id"]),
+                "item_title": it["title"], "variant": it["variant"], "store": it["store"],
+                "price_paid": it["price_paid"], "order_date": it["order_date"],
+                "found_price": pr[0]["price"] if pr else None, "seen_at": pr[0]["seen_at"] if pr else None,
+                "drop_usd": opp["drop_usd"],
+                "cited_text": pc[0]["cited_text"] if pc else None, "source_url": pc[0]["source_url"] if pc else None,
+                "senso_source_id": pc[0]["senso_source_id"] if pc else None,
+                "decision": a["decision"], "failed_rule": failed, "rule_results": results,
+                "action_type": p.get("action_type", prop.get("action_type")), "kind": opp["kind"],
+                "approval_id": appr[0]["id"] if appr else None,
+                "pact_version": a.get("pact_version"),
+                "pact_hash": (_jsonish(pk[0]["pact_text"]) or {}).get("hash") if pk else None,
+                "chat_script": cs[0]["chat_script"] if cs else None,
             }
         )
     return out

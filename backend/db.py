@@ -6,8 +6,9 @@ used) so the rest of the team can run everything with no SingleStore credentials
 Callers write portable SQL with %s placeholders; only this module translates them to
 SQLite's "?" when SingleStore isn't configured.
 
-execute() returns cur.lastrowid for an INSERT, cur.rowcount otherwise (matches the
-dev/stubs/db.py rehearsal stub everyone already built against).
+execute() always returns cur.lastrowid, and connection() always returns a brand-new
+DB-API connection (B closes it after execute_once, so it must never be shared) --
+matches backend/pact/devkit.py's stand-in, which the rest of the team built against.
 """
 
 from __future__ import annotations
@@ -64,13 +65,14 @@ def query(sql: str, params: tuple = ()) -> list[dict]:
 
 
 def execute(sql: str, params: tuple = ()) -> int:
-    is_insert = sql.lstrip().upper().startswith("INSERT")
+    """Returns lastrowid, matching backend/pact/devkit.py's stand-in exactly (the
+    whole team built against it)."""
     conn = connection()
     try:
         cur = conn.cursor()
         cur.execute(_adapt(sql), params)
         conn.commit()
-        return cur.lastrowid if is_insert else cur.rowcount
+        return cur.lastrowid
     finally:
         conn.close()
 
