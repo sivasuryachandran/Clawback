@@ -72,10 +72,10 @@ FALLBACK_MOCKSTORE_LISTINGS = [
 # Real-store placeholders (mirrors dev/stubs/seed.py). Replace once the team picks real
 # items; the matching seed/receipts/*.eml would need updating too.
 REAL_STORE_LISTINGS = [
-    {"store": "bestbuy", "sku": "BB-PLACEHOLDER", "upc": "000000000001", "model_number": None,
-     "variant": "Standard", "url": "https://bestbuy.com/PLACEHOLDER", "title": "PLACEHOLDER Best Buy item", "price": 43.99},
-    {"store": "target", "sku": "TG-PLACEHOLDER", "upc": "000000000002", "model_number": None,
-     "variant": "Standard", "url": "https://target.com/PLACEHOLDER", "title": "PLACEHOLDER Target item", "price": 29.99},
+    {"store": "bestbuy", "sku": "BB-LGT-MXA3S", "upc": "850002000010", "model_number": "MXA3S",
+     "variant": "Graphite", "url": "https://www.bestbuy.com/site/logitech-mx-anywhere-3s", "title": "Logitech MX Anywhere 3S Wireless Mouse", "price": 73.99},
+    {"store": "target", "sku": "TG-THR-KNT1", "upc": "850002000027", "model_number": "THR-KNT1",
+     "variant": "Cream", "url": "https://www.target.com/p/threshold-chunky-knit-throw", "title": "Threshold Chunky Knit Throw Blanket", "price": 39.99},
 ]
 
 
