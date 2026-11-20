@@ -39,8 +39,21 @@ def _sqlite_path() -> str:
 def connection():
     """DB-API connection, for execute_once's conditional-update pattern."""
     if using_singlestore():
+        import time
         import singlestoredb as s2
-        return s2.connect(_singlestore_url())
+        # SingleStore Helios sometimes fails a connection with 1042 ("Unable to get address information for host
+        # <client ip>.<isp>"): a server-side reverse-DNS lookup of OUR public IP that works on the next try. Retry briefly.
+        last = None
+        for attempt in range(8):
+            try:
+                return s2.connect(_singlestore_url(), connect_timeout=10)
+            except s2.exceptions.OperationalError as exc:
+                last = exc
+                code = exc.args[0] if exc.args else None
+                if code not in (1042, 2003, 2013) or attempt == 7:
+                    raise
+                time.sleep(0.4 * (attempt + 1))
+        raise last  # pragma: no cover
     conn = sqlite3.connect(_sqlite_path(), timeout=10, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
@@ -50,16 +63,52 @@ def _adapt(sql: str) -> str:
     return sql if using_singlestore() else sql.replace("%s", "?")
 
 
+import threading
+
+_local = threading.local()          # one reusable SingleStore connection per thread (a new TLS connection costs about a second)
+
+
+def _shared():
+    c = getattr(_local, "conn", None)
+    if c is None:
+        c = _local.conn = connection()
+    return c
+
+
+def _drop_shared():
+    c = getattr(_local, "conn", None)
+    _local.conn = None
+    try:
+        if c is not None:
+            c.close()
+    except Exception:
+        pass
+
+
+def _run_singlestore(fn):
+    """Run fn(conn) on the thread's shared connection; on a dead connection reconnect once and retry."""
+    try:
+        return fn(_shared())
+    except Exception as exc:
+        if type(exc).__name__ not in ("OperationalError", "InterfaceError", "InternalError", "DatabaseError"):
+            raise
+        _drop_shared()
+        return fn(_shared())
+
+
 def query(sql: str, params: tuple = ()) -> list[dict]:
+    if using_singlestore():
+        def go(conn):
+            cur = conn.cursor()
+            cur.execute(_adapt(sql), params)
+            cols = [d[0] for d in cur.description] if cur.description else []
+            return [dict(zip(cols, r)) for r in cur.fetchall()]
+        return _run_singlestore(go)
     conn = connection()
     try:
         cur = conn.cursor()
         cur.execute(_adapt(sql), params)
-        cols = [d[0] for d in cur.description] if cur.description else []
-        rows = cur.fetchall()
-        if using_singlestore():
-            return [dict(zip(cols, r)) for r in rows]
-        return [dict(r) for r in rows]
+        return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
 
@@ -67,6 +116,13 @@ def query(sql: str, params: tuple = ()) -> list[dict]:
 def execute(sql: str, params: tuple = ()) -> int:
     """Returns lastrowid, matching backend/pact/devkit.py's stand-in exactly (the
     whole team built against it)."""
+    if using_singlestore():
+        def go(conn):
+            cur = conn.cursor()
+            cur.execute(_adapt(sql), params)
+            conn.commit()
+            return cur.lastrowid
+        return _run_singlestore(go)
     conn = connection()
     try:
         cur = conn.cursor()
