@@ -19,9 +19,21 @@ class LLM(Protocol):
 
 class AnthropicLLM:
     def __init__(self, api_key: str, model: str | None = None):
-        import anthropic  # lazy: not needed offline
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self.api_key = api_key
         self.model = model or os.environ.get("LLM_MODEL", "claude-opus-5-5")
+        self._client = None
+
+    @property
+    def client(self):
+        # Created on first call, so a missing SDK surfaces as "provider unavailable" in
+        # ask_llm (-> offline rules) instead of crashing the endpoint.
+        if self._client is None:
+            import anthropic
+            # On stage a hung call freezes the demo: short timeout, one SDK retry.
+            self._client = anthropic.Anthropic(
+                api_key=self.api_key, timeout=float(os.environ.get("LLM_TIMEOUT_S", "15")),
+                max_retries=1)
+        return self._client
 
     def call_tool(self, system, user, tool, facts):
         resp = self.client.beta.messages.create(

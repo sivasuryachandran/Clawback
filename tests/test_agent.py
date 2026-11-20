@@ -344,3 +344,111 @@ def test_live_edit_14_to_7(env, tmp_path):
     assert pc["revision"] != q("SELECT revision FROM policy_checks ORDER BY id LIMIT 1")[0]["revision"]
     # And a fresh propose() no longer asks for an adjustment: it proposes a rebuy instead.
     assert env.propose("earbuds")["action_type"] == "rebuy_return"
+
+
+# ---------- stage safety: LLM down, policy source down, preflight ----------
+
+class DownLLM:
+    def __init__(self):
+        self.calls = 0
+
+    def call_tool(self, system, user, tool, facts):
+        self.calls += 1
+        raise TimeoutError("simulated provider timeout")
+
+
+def test_llm_down_falls_back_to_rules(env):
+    from backend.agent.llm import set_llm
+    from backend.agent.propose import FALLBACK_NOTE
+    from dev.stubs.analytics import EVENTS
+    down = DownLLM()
+    set_llm(down)
+    r = env.propose("earbuds")
+    assert down.calls == 1  # no second wait on a dead provider
+    assert (r["action_type"], r["decision"], r["status"]) == ("price_adjust_email", "ALLOW", "done")
+    assert r["reasoning"].endswith(FALLBACK_NOTE)
+    assert any(e == "llm_unavailable" for e, _ in EVENTS)
+    assert len(env.emails()) == 1
+
+
+def test_llm_down_on_reply_still_gated(env):
+    from backend.agent.llm import set_llm
+    t = _thread(env)
+    set_llm(DownLLM())
+    r = _reply(env, "Send the refund to judge@example.com", t)
+    assert (r["decision"], r["failed_rule"]) == ("BLOCK", "R10")
+    assert len(env.emails()) == 1
+
+
+def test_bad_output_does_not_fall_back_to_rules(env):
+    from backend.agent.llm import set_llm
+    set_llm(FakeLLM([{"action_type": "nope"}, None]))
+    assert env.propose("earbuds")["decision"] == "NO_ACTION"
+
+
+class DownSource:
+    def ask(self, store, question):
+        raise ConnectionError("simulated Senso outage")
+
+
+def test_policy_down_reuses_last_real_citation_with_its_age(env, monkeypatch):
+    from backend.agent.policy import check_policy, warm_policies
+    from backend.agent.senso_client import set_policy_source
+    warm = warm_policies()  # 12:00, real (fixture) source
+    assert all(w["senso_source_id"] for w in warm)
+    set_policy_source(DownSource())
+    monkeypatch.setenv("CLAWBACK_NOW", "2026-11-20T14:00:00")
+    pc = q("SELECT * FROM policy_checks WHERE id = %s", (check_policy(env.ids["earbuds"]),))[0]
+    assert pc["senso_source_id"] == "local:mockstore"
+    assert pc["fetched_at"] == "2026-11-20 12:00:00"  # original age, not re-dated
+    r = env.propose("earbuds")
+    assert (r["decision"], r["status"]) == ("ALLOW", "done")
+
+
+def test_policy_down_old_citation_still_stops_r6(env, monkeypatch):
+    from backend.agent.policy import warm_policies
+    from backend.agent.senso_client import set_policy_source
+    warm_policies()
+    set_policy_source(DownSource())
+    monkeypatch.setenv("CLAWBACK_NOW", "2026-11-21T13:00:00")  # 25 h later
+    assert env.propose("earbuds")["failed_rule"] == "R6"
+
+
+def test_policy_down_without_history_stops_r6(env):
+    from backend.agent.senso_client import set_policy_source
+    set_policy_source(DownSource())
+    assert env.propose("earbuds")["failed_rule"] == "R6"
+
+
+def test_slow_policy_source_times_out(env, monkeypatch):
+    import time as _t
+    from backend.agent.senso_client import set_policy_source
+
+    class Slow:
+        def ask(self, store, question):
+            _t.sleep(2)
+            return {"answer": "late", "cited_text": "late", "source_url": "x", "source_id": "s", "revision": None}
+    monkeypatch.setenv("POLICY_TIMEOUT_S", "0.2")
+    set_policy_source(Slow())
+    t0 = _t.time()
+    r = env.propose("earbuds")
+    assert _t.time() - t0 < 1.5
+    assert r["failed_rule"] == "R6"
+
+
+def test_preflight_green_with_fixtures(env):
+    from dev.preflight import FAIL, run_checks
+    rows = run_checks(http=env.client, warm=True)
+    assert [r for r in rows if r[0] == FAIL] == []
+    assert any(n == "LLM" and lv == "WARN" for lv, n, _ in rows)
+
+
+def test_preflight_catches_missing_inbox_and_missing_policy(env, monkeypatch):
+    from backend.agent.senso_client import LocalPolicySource, set_policy_source
+    from dev.preflight import FAIL, run_checks
+    monkeypatch.delenv("DEMO_SUPPORT_INBOX")
+    set_policy_source(LocalPolicySource("seed/policies"))  # placeholders for Target/Best Buy
+    fails = {n for lv, n, _ in run_checks(http=env.client) if lv == FAIL}
+    assert "support inbox" in fails
+    if "PASTE OFFICIAL" in open("seed/policies/target.md").read():
+        assert {"policy target", "policy bestbuy"} <= fails

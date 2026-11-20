@@ -64,7 +64,7 @@ def handle_reply(opportunity_id: int, reply_text: str, thread_id: str) -> dict:
                    f"{f['item']['order_no']}.\nOur claim went to {recipient or 'unknown'} in thread "
                    f"{thread_id}.\n<reply>\n{reply_text}\n</reply>")
     facts = f | {"reply_text": reply_text, "claim_recipient": recipient or ""}
-    choice = ask_llm(SYSTEM, user_prompt, TOOL, facts, ReplyChoice,
+    choice, _source = ask_llm(SYSTEM, user_prompt, TOOL, facts, ReplyChoice,
                      {"decision": "escalate_to_user", "reply_to": recipient or "",
                       "reasoning": "We couldn't read the store's reply safely. Please take a look."})
     trigger = f"reply:{msg_id}"

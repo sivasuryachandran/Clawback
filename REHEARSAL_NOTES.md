@@ -5,7 +5,7 @@ This file is what comes to the event; the code stays home.
 
 ## Results
 
-- `pytest -q`: **26 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
+- `pytest -q`: **35 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
 - `python -m dev.run_demo` (6 s) with the real `seed/policies`:
 
 ```
@@ -94,6 +94,33 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
 ### Firedrill: NOT run
 - **Scenarios F1–F10 are not defined in the team split or in the build doc PDF.** Somebody
   needs to write them before kickoff, or drop this stretch. No pass rate is claimed.
+
+## Stage-safety additions (built after the first pass)
+
+- **LLM timeout + fallback.** `LLM_TIMEOUT_S` (default 15 s), one SDK retry. If the provider
+  is *unreachable* (timeout, connection error, 5xx, missing SDK), the offline rules decide using
+  the same guidance, and the reasoning ends with "(Chosen by Clawback's built-in rules because
+  the AI didn't answer in time.)". If the model *answers badly* twice, it is still `none`: bad
+  output never gets a second brain. A `llm_unavailable` event is tracked.
+- **Policy timeout + reuse.** `POLICY_TIMEOUT_S` (default 10 s) wall clock per question. If
+  the source is slow or down, check_policy reuses the most recent policy_checks row **with a
+  source** for the same store + question, keeping its **original fetched_at**. So R6 still
+  stops it once that citation is more than 24 hours old. A "no source" answer is never replaced
+  by an older one. A `policy_source_unavailable` event is tracked.
+- **`python -m dev.preflight [--warm] [--live]`.** One OK/WARN/FAIL line each for: demo mode,
+  allowlist (and no retailer on it), support inbox on the allowlist, demo user email on the
+  allowlist, open opportunities, outbox writable / transport wired, LLM (`--live` = one real
+  call, timed), one citation probe per store (timed), and the mock store reachable. `--warm`
+  runs check_policy for every open opportunity, so a real citation exists to fall back on.
+  Exits 1 on any FAIL. Today it honestly FAILs on Target/Best Buy (no pasted text) and on the
+  mock store when no server is running.
+- **Run order on the day:** start the server → `python -m dev.preflight --warm --live` → fix
+  the FAILs → dry run → preflight again about 10 minutes before going on stage (warming again
+  restarts the 24-hour clock).
+- Tests: 35 passing (9 new: LLM down → rules; LLM down on a reply is still gated; bad output
+  doesn't fall back; policy down reuses the citation with its age; 25 h later → R6; no history
+  → R6; a slow source times out; preflight green with fixtures; preflight catches a missing
+  inbox and missing policy text).
 
 ## Things in the team spec that looked wrong or unclear
 

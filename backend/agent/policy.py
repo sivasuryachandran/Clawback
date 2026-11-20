@@ -4,10 +4,13 @@ One narrow question for the item's store (from the DB). The answer and quote com
 PolicySource; with no source, senso_source_id is NULL and the gate stops on R6.
 """
 import json
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 
 from backend.agent import clock
-from backend.agent.deps import db
+from backend.agent.deps import db, track
 from backend.agent.senso_client import STORE_NAMES, get_policy_source
 
 
@@ -40,16 +43,63 @@ def question_for(opp: dict, item: dict, policy: dict | None) -> str:
     return f"Does {name} adjust prices after purchase for {cat} items, and for how long?"
 
 
-def check_policy(opportunity_id: int) -> int:
-    opp, item, policy = _load(opportunity_id)
-    q = question_for(opp, item, policy)
-    try:
-        r = get_policy_source().ask(item["store"], q)
-    except Exception as e:  # source down -> no citation -> R6 stops it
-        r = {"answer": f"policy source error: {e}", "cited_text": None, "source_url": None,
-             "source_id": None, "revision": None}
+_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="policy")
+
+
+def _ask_with_timeout(store: str, question: str) -> dict:
+    """Wall-clock limit on the policy source (Senso can be slow). Raises on timeout/error."""
+    fut = _pool.submit(get_policy_source().ask, store, question)
+    return fut.result(timeout=float(os.environ.get("POLICY_TIMEOUT_S", "10")))
+
+
+def _last_real_answer(store: str, question: str) -> dict | None:
+    """The most recent answer that came WITH a source for the same store + question.
+    Reused only when the source is unreachable; never when it answered 'no source'."""
+    rows = db.query(
+        "SELECT answer, cited_text, source_url, senso_source_id, revision, fetched_at "
+        "FROM policy_checks WHERE store = %s AND question = %s AND senso_source_id IS NOT NULL "
+        "ORDER BY fetched_at DESC LIMIT 1", (store, question))
+    return rows[0] if rows else None
+
+
+def _insert(opportunity_id, store, q, r, fetched_at) -> int:
     return db.execute(
         "INSERT INTO policy_checks (opportunity_id, store, question, answer, cited_text, "
         "source_url, senso_source_id, revision, fetched_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-        (opportunity_id, item["store"], q, r.get("answer"), r.get("cited_text"),
-         r.get("source_url"), r.get("source_id") or None, r.get("revision"), clock.ts()))
+        (opportunity_id, store, q, r.get("answer"), r.get("cited_text"), r.get("source_url"),
+         r.get("source_id") or None, r.get("revision"), fetched_at))
+
+
+def check_policy(opportunity_id: int) -> int:
+    opp, item, policy = _load(opportunity_id)
+    store = item["store"]
+    q = question_for(opp, item, policy)
+    try:
+        r = _ask_with_timeout(store, q)
+    except Exception as e:  # slow / down / not wired
+        prev = _last_real_answer(store, q)
+        track("policy_source_unavailable", {"store": store, "error": repr(e)[:200],
+                                            "reused_citation": prev is not None})
+        if prev:
+            # Same real quote, and its ORIGINAL fetched_at, so R6's 24-hour check still
+            # judges how old the citation really is. Nothing is made up or re-dated.
+            return _insert(opportunity_id, store, q,
+                           {"answer": prev["answer"], "cited_text": prev["cited_text"],
+                            "source_url": prev["source_url"], "source_id": prev["senso_source_id"],
+                            "revision": prev["revision"]}, prev["fetched_at"])
+        r = {"answer": f"policy source unavailable: {e!r}"[:500], "cited_text": None,
+             "source_url": None, "source_id": None, "revision": None}
+    return _insert(opportunity_id, store, q, r, clock.ts())
+
+
+def warm_policies() -> list[dict]:
+    """Ask the policy source for every open opportunity before going on stage, so a citation
+    exists to fall back on. Returns one row per opportunity for the preflight report."""
+    out = []
+    for o in db.query("SELECT id FROM opportunities WHERE status = 'open' ORDER BY id"):
+        t = time.time()
+        pc_id = check_policy(o["id"])
+        pc = db.query("SELECT store, question, cited_text, senso_source_id, fetched_at "
+                      "FROM policy_checks WHERE id = %s", (pc_id,))[0]
+        out.append(pc | {"opportunity_id": o["id"], "ms": int((time.time() - t) * 1000)})
+    return out

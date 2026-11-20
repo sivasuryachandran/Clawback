@@ -12,8 +12,8 @@ from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from backend.agent import clock
-from backend.agent.deps import db, pact
-from backend.agent.llm import get_llm
+from backend.agent.deps import db, pact, track
+from backend.agent.llm import RuleBasedLLM, get_llm
 
 USER_ID = os.environ.get("CLAWBACK_USER_ID", "u_demo")  # schema has no orders.user_id: one user
 ActionType = Literal["price_adjust_email", "claim_packet", "claim_followup", "rebuy_return",
@@ -233,24 +233,42 @@ def save(p: dict) -> dict:
     return p
 
 
+FALLBACK_NOTE = " (Chosen by Clawback's built-in rules because the AI didn't answer in time.)"
+
+
 def ask_llm(system: str, user: str, tool: dict, facts: dict, model, fallback: dict):
-    """Call, validate, retry once; else the fallback (an explicit 'do nothing')."""
+    """Returns (choice, source). source is:
+      "llm"            valid answer from the configured LLM
+      "rules"          the LLM was unreachable/timed out -> offline rules decided (same guidance)
+      "invalid"        the LLM answered badly twice -> the explicit 'do nothing' fallback
+    Bad output never falls back to the rules: a model that says nonsense gets no second brain.
+    """
     llm = get_llm()
     for _ in range(2):
         try:
             raw = llm.call_tool(system, user, tool, facts)
-            if raw is not None:
-                return model.model_validate(raw)
+        except Exception as e:  # timeout, connection, 5xx, missing SDK: the provider is down
+            track("llm_unavailable", {"tool": tool["name"], "error": repr(e)[:200]})
+            if isinstance(llm, RuleBasedLLM):
+                break
+            try:
+                choice = model.model_validate(RuleBasedLLM().call_tool(system, user, tool, facts))
+                choice.reasoning = choice.reasoning[: 600 - len(FALLBACK_NOTE)] + FALLBACK_NOTE
+                return choice, "rules"
+            except (ValidationError, ValueError, TypeError):
+                break
+        if raw is None:
+            continue
+        try:
+            return model.model_validate(raw), "llm"
         except (ValidationError, ValueError, TypeError):
-            pass
-        except Exception:  # provider down etc.: same as invalid
-            pass
-    return model.model_validate(fallback)
+            continue
+    return model.model_validate(fallback), "invalid"
 
 
 def propose(opportunity_id: int) -> dict:
     f = load_facts(opportunity_id)
-    choice = ask_llm(SYSTEM, build_prompt(f), TOOL, f, LLMChoice,
-                     {"action_type": "none", "template": None, "alert_at": None,
-                      "reasoning": "We couldn't decide safely. Nothing was done."})
+    choice, _source = ask_llm(SYSTEM, build_prompt(f), TOOL, f, LLMChoice,
+                              {"action_type": "none", "template": None, "alert_at": None,
+                               "reasoning": "We couldn't decide safely. Nothing was done."})
     return save(assemble(choice, f))
