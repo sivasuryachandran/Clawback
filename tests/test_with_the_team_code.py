@@ -1,8 +1,8 @@
-"""End to end against everyone's REAL code: Siva's gate and Pact, B's agent, and my app, in one process on a free port.
+"""End to end against everyone's REAL code: Siva's gate and Pact, B's agent, A's watch routes and my app, on one port.
 
-It runs `backend.dev_app` (C's main.py + B's agent + Siva's Pact on Siva's stand-in database) as a SEPARATE process, so
-his stand-in `backend.db` can never leak into the rest of the suite, then drives the demo over HTTP. When A's real
-database lands and dev_app.py is deleted, this file skips itself (run the same checks against `backend.main`).
+`tests/e2e_launcher.py` runs it as a SEPARATE process over Siva's seeded stand-in database (so that stand-in can never leak
+into the rest of the suite, and no SingleStore is needed), then these tests drive the demo over HTTP. The same checks
+should be pointed at `backend.main` on A's real database once its seed flow is the way the demo runs.
 """
 import os
 import socket
@@ -15,7 +15,8 @@ import httpx
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-pytestmark = pytest.mark.skipif(not (ROOT / "backend" / "dev_app.py").exists(), reason="dev_app.py is gone (A's database landed)")
+pytestmark = pytest.mark.skipif(not (ROOT / "backend" / "pact" / "devkit.py").exists(), reason="Siva's devkit is gone")
+SECRET = "e2e-secret"
 
 
 def _free_port() -> int:
@@ -29,13 +30,17 @@ def app(tmp_path_factory):
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
     tmp = tmp_path_factory.mktemp("team")
-    env = dict(os.environ, CLAWBACK_API_BASE=base, CLAWBACK_BASE_URL=base, BACKEND_URL=base, ANALYTICS_LOG="off",
+    env = dict(os.environ, CLAWBACK_API_BASE=base, CLAWBACK_BASE_URL=base, BACKEND_URL=base, ANALYTICS_LOG="off", MOCK_WEBHOOK_SECRET=SECRET,
                OUTBOX_DIR=str(tmp / "outbox"), INBOX_DIR=str(tmp / "inbox"), LOG_LEVEL="WARNING", PYTHONDONTWRITEBYTECODE="1")
     env.pop("PERSONA_API_KEY", None)
     env.pop("LLM_API_KEY", None)
-    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "backend.dev_app:app", "--port", str(port), "--log-level", "warning"],
-                            cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    client = httpx.Client(base_url=base, timeout=60.0, headers={"X-User-Id": "u_demo"})
+    # The child's output goes to a FILE, never a pipe nobody reads: a full 64 KB pipe blocks the child on write and freezes the app
+    # (failed webhooks print long tracebacks, and enough of them filled the pipe).
+    log_path = tmp / "app.log"
+    log_file = open(log_path, "wb")
+    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "tests.e2e_launcher:app", "--port", str(port), "--log-level", "warning"],
+                            cwd=ROOT, env=env, stdout=log_file, stderr=subprocess.STDOUT)
+    client = httpx.Client(base_url=base, timeout=30.0, headers={"X-User-Id": "u_demo"})
     try:
         for _ in range(120):
             try:
@@ -44,13 +49,14 @@ def app(tmp_path_factory):
             except httpx.TransportError:
                 pass
             if proc.poll() is not None:
-                pytest.fail("the integrated app did not start:\n" + proc.stdout.read().decode()[-2000:])
+                pytest.fail("the integrated app did not start:\n" + log_path.read_text()[-2000:])
             time.sleep(0.25)
         else:
             pytest.fail("the integrated app did not answer /health in 30 s")
         yield client
     finally:
         client.close()
+        log_file.close()
         proc.terminate()
         try:
             proc.wait(timeout=10)
@@ -81,7 +87,7 @@ def test_every_router_mounts_with_no_duplicate_routes(app):
     h = app.get("/health").json()
     assert h["route_conflicts"] == [] and h["demo_mode"] is True
     for m in ["mockstore.routes", "backend.analytics.api", "backend.debug.api", "backend.voice.api", "backend.pact.api",
-              "backend.pact.schedules_api", "backend.persona.api", "backend.agent.api"]:
+              "backend.pact.schedules_api", "backend.persona.api", "backend.agent.api", "backend.watch.api"]:
         assert h["routers"][m] == "mounted", (m, h["routers"][m])
     assert h["routers"]["backend.pact.scheduler"] == "attached"
 
@@ -178,8 +184,9 @@ def test_support_box_with_a_real_claim_thread_goes_through_the_gate(demo):
         time.sleep(4)
     log = app.get("/mock/api/support-log").json()["messages"]
     assert [m["ok"] for m in log] == [True, True] and all(m["target"].startswith("thread ") for m in log)
-    rows = [r for r in app.get("/activity").json() if r.get("opportunity_id") == 1 and r["action_type"] == "claim_followup"]
-    assert [(r["decision"], r["failed_rule"]) for r in rows] == [("BLOCK", "R10"), ("ALLOW", None)]   # newest first: refund stopped, proof sent
+    rows = {r["audit_id"]: r for r in app.get("/activity").json()
+            if r["item_title"] == "Aurora Wireless Earbuds" and r["action_type"] == "claim_followup"}     # A's join can repeat a row
+    assert [(r["decision"], r["failed_rule"]) for _, r in sorted(rows.items(), reverse=True)] == [("BLOCK", "R10"), ("ALLOW", None)]   # newest first: refund stopped, proof sent
 
 
 def test_support_box_before_any_claim_no_longer_fails_silently(app):
@@ -223,3 +230,46 @@ def test_voice_cannot_unpause(demo):
     for q in ["unpause clawback", "resume clawback", "turn clawback back on"]:
         assert app.post("/voice/ask", json={"text": q}).json()["intent"] == "refused"
     assert app.get("/pact").json()["paused"] is True
+
+
+# ---- the price webhook, against A's REAL receiver (POST /watch/price-changed) -------------------------------------------------------------
+# These use `refresh` payloads: A's receiver verifies the signature and dedupes exactly the same way, and records the price without
+# running its matcher. A real price CHANGE also runs A's matcher, which needs A's schema (title_vec); Siva's stand-in database
+# lacks it, so that path belongs on A's own seeded database.
+
+def _signed(payload: dict, secret: str = SECRET) -> tuple[bytes, dict]:
+    import hashlib, hmac, json as _json
+    body = _json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return body, {"Content-Type": "application/json", "X-Mockstore-Signature": "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()}
+
+
+def test_a_forged_or_unsigned_webhook_is_refused_by_a(demo):
+    app, _ = demo
+    payload = {"event_id": "e-forged", "listing_id": 1, "price": 1.0, "store": "mockstore", "sku": "MS-1001", "variant": "Black", "old_price": 95.99, "refresh": False}
+    body, headers = _signed(payload, secret="not-the-secret")
+    assert app.post("/watch/price-changed", content=body, headers=headers).status_code == 401
+    assert app.post("/watch/price-changed", content=body, headers={"Content-Type": "application/json"}).status_code == 401
+    body, headers = _signed(payload)
+    assert app.post("/watch/price-changed", content=body + b" ", headers=headers).status_code == 401      # body tampered after signing
+
+
+def test_a_repeat_of_the_same_event_is_deduped_by_event_id(demo):
+    app, _ = demo
+    payload = {"event_id": "e-repeat-1", "listing_id": 1, "price": 95.99, "store": "mockstore", "sku": "MS-1001", "variant": "Black", "old_price": 95.99, "refresh": True}
+    body, headers = _signed(payload)
+    first = app.post("/watch/price-changed", content=body, headers=headers)
+    again = app.post("/watch/price-changed", content=body, headers=headers)
+    assert first.status_code == 200 and "deduped" not in first.json()
+    assert again.status_code == 200 and again.json() == {"opportunity_ids": [], "deduped": True}
+
+
+def test_a_refresh_is_recorded_but_is_not_a_new_drop(demo):
+    app, _ = demo
+    payload = {"event_id": "e-refresh-1", "listing_id": 2, "price": 199.0, "store": "mockstore", "sku": "MS-2002", "variant": "White", "old_price": 199.0, "refresh": True}
+    body, headers = _signed(payload)
+    r = app.post("/watch/price-changed", content=body, headers=headers)
+    assert r.status_code == 200 and r.json() == {"opportunity_ids": []}                                   # no new opportunity
+    assert app.post("/mock/api/resend").json() == {"sent": 5}
+    time.sleep(3)
+    log = app.get("/mock/api/webhook-log").json()["deliveries"][:5]
+    assert len(log) == 5 and all(d["ok"] and d["refresh"] for d in log), log                             # all five accepted by A

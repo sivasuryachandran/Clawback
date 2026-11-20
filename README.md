@@ -127,7 +127,7 @@ python3 frontend/serve.py        # the app on http://localhost:3000   (second te
 pytest -q
 ```
 
-The whole suite (Pact, agent, mock store, analytics, Under the hood, voice, and end-to-end runs of the real app): `525 passed, 1 skipped`.
+The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voice, and end-to-end runs of the real app. `[Fill in the final count at 4:00.]`
 
 ## Real vs simulated
 

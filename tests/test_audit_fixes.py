@@ -99,6 +99,7 @@ def test_rate_limit_window_slides():
 
 def test_overview_never_calls_the_matcher(sample_db, monkeypatch):
     import sys, types
+    monkeypatch.setattr(panels, "_lookup", lambda paths, name: None if name == "MATCH_SQL" else __import__("importlib").import_module(paths[0]).__dict__.get(name))   # documented SQL, whatever A ships
     calls = []
     mod = types.ModuleType("backend.watch")
     mod.match = lambda i: calls.append(i) or [{"listing_id": 1}]
