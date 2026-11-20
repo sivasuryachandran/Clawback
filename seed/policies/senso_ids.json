@@ -1,0 +1,42 @@
+{
+  "07033646-178d-4e7e-ae60-3739ac09a223": {
+    "store": "mockstore",
+    "source_url": "/mock/policy",
+    "kb_node_id": "882334ac-0315-42d5-b30d-d1595487807a",
+    "title": "mockstore policy | /mock/policy",
+    "indexed_s": 1.2,
+    "status": "complete"
+  },
+  "11e8f80a-bf74-42ac-8d0d-aeefd3e43648": {
+    "store": "target",
+    "source_url": "https://www.target.com/help/articles/policies-guidelines/price-match-guarantee",
+    "kb_node_id": "956b7507-ca04-42f0-832b-2ce61c8ada96",
+    "title": "target policy | https://www.target.com/help/articles/policies-guidelines/price-match-guarantee",
+    "indexed_s": 12.5,
+    "status": "complete"
+  },
+  "e6339713-559b-4dfa-aea5-821215faafe9": {
+    "store": "target",
+    "source_url": "https://www.target.com/returns",
+    "kb_node_id": "5fe104f1-6105-4551-a2c7-e067833322fb",
+    "title": "target policy | https://www.target.com/returns",
+    "indexed_s": 12.4,
+    "status": "complete"
+  },
+  "64a5181f-b314-4545-9d9b-237361580fd7": {
+    "store": "bestbuy",
+    "source_url": "https://www.bestbuy.com/site/help-topics/price-match-guarantee/pcmcat290300050002.c?id=pcmcat290300050002",
+    "kb_node_id": "06d0b0c5-6d0a-45f0-aaa0-eafcb20f523d",
+    "title": "bestbuy policy | https://www.bestbuy.com/site/help-topics/price-match-guarantee/pcmcat290300050002.c?id=pcmcat290300050002",
+    "indexed_s": 12.3,
+    "status": "complete"
+  },
+  "515d4efe-8e31-4c8a-8598-72e190faa3cd": {
+    "store": "bestbuy",
+    "source_url": "https://www.bestbuy.com/site/help-topics/return-exchange-policy/pcmcat260800050014.c?id=pcmcat260800050014",
+    "kb_node_id": "06e00f9e-1cbc-4918-9327-439cd1599382",
+    "title": "bestbuy policy | https://www.bestbuy.com/site/help-topics/return-exchange-policy/pcmcat260800050014.c?id=pcmcat260800050014",
+    "indexed_s": 12.2,
+    "status": "complete"
+  }
+}

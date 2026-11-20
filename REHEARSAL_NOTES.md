@@ -329,6 +329,30 @@ Consequences:
 - The mock policy link is now `Source: /mock/policy`, resolved against `CLAWBACK_BASE_URL`, so it
   works on port 8000 or 8001.
 
+## Senso LIVE (2026-11-20, real key)
+
+- **Ingest** (`python -m dev.senso_ingest`): 5 raw-text documents (Mock Store 1, Target 2, Best
+  Buy 2), each POST about 0.3 s; **searchable after 1.2-12.5 s** (polled every 5 s, so these are
+  upper bounds). The ids are in `seed/policies/senso_ids.json` (content_id -> store, source URL,
+  kb_node_id; no secrets).
+- **Search** (`/org/search/context`): **0.9-1.8 s** per question; every quote came from the asked
+  store's own document, with Senso's `version_id` as the revision. A propose now makes 1-2 Senso
+  calls (about 2-3 s per item); `/dev/run-all` for six items took about 11 s.
+- **Real stack** with Senso: the six results are unchanged (earbuds Done, lamp ASK R12, backpack
+  R5, fan R4, Best Buy R8, Target alert); every Why? shows `senso:<content_id>` + revision; the
+  Mock Store link resolves to :8001.
+- **Live edit** (`python -m dev.senso_live_edit edit|revert`, uses the Senso CLI 0.18.7 via
+  `node <cli.js>`; the `senso.cmd` wrapper mangles JSON on Windows): `kb update-raw` 2.4-2.6 s; the
+  new sentence searchable **13.6 s** after the edit (revert: 5.9 s); same content_id, new version
+  id each time. The stored earbuds claim re-gated with the 7-day row → **BLOCK R7**, quoting
+  "Price adjustments 7 days from purchase, own prices only." with the new revision.
+  **Stage trap confirmed:** re-running the whole propose after the edit gives an automatic
+  **rebuy_return ALLOW at $95.99** (under the $150 ask-first limit). Re-check only the stored
+  claim, and run `revert` afterwards (Senso is back at 14 days now).
+- Credits: about 5 uploads + 2 updates + roughly 60 searches used today.
+- The tests never call live Senso (the B fixture deletes SENSO_API_KEY; no other test touches
+  the policy path).
+
 ## Things in the team spec that looked wrong or unclear
 
 1. **Spec location:** the prompt said `docs/clawback-team-split.md`; the file is at the repo
