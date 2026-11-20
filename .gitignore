@@ -8,3 +8,10 @@ node_modules/
 draft/
 *.pdf
 clawback-team-split-v4*.md
+.env.*
+!.env.example
+.pytest_last.json
+.analytics_events.jsonl
+*.log
+frontend/.next/
+next-env.d.ts
