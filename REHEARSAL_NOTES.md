@@ -409,3 +409,18 @@ Consequences:
 - [ ] Agree with Siva on: the re-exports in `backend/pact/__init__.py`, `record_result`, the clock,
       and the R10-vs-R13 wording for the stunt.
 - [ ] Write F1–F10, or drop Firedrill.
+
+## Free LLM option (added 2026-11-20, NOT checked live)
+
+- `OpenAICompatLLM` in backend/agent/llm.py: any OpenAI-compatible `/chat/completions` endpoint
+  with function calling. `LLM_PROVIDER=ollama` uses local Ollama (default base
+  `http://localhost:11434/v1`, no key, default model `qwen3:8b`; this laptop has qwen3 1.7b/4b/8b,
+  all tool-capable). `LLM_PROVIDER=openai_compat` + `LLM_BASE_URL` (+ `LLM_API_KEY`) works for
+  any hosted free tier that speaks the same format. Unset provider: Anthropic if
+  `LLM_API_KEY` is set, else the offline rules. Default timeout 60 s (local CPU models are slow).
+- Offline tests use a fake OpenAI-style server: request shape, string or dict arguments, no
+  tool call → none. **The live run with qwen3 was skipped at the user's request**, so its speed
+  and accuracy on these prompts are unknown.
+- `dev/llm_live_check.py` now supports `LLM_PROVIDER=ollama`, and detects a fallback to the rules
+  from the saved proposals (after integration, analytics go to C's real `track`, so the old
+  event-based check stayed silent).

@@ -18,7 +18,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("DEMO_USER_EMAIL", USER)
     monkeypatch.setenv("DEMO_ALLOWED_RECIPIENTS", f"{SUPPORT}, {USER}")
     monkeypatch.setenv("CLAWBACK_NOW", "2026-11-20T12:00:00")  # pinned: tests are deterministic
-    for k in ("DEMO_MODE", "LLM_API_KEY", "SENSO_API_KEY", "SINGLESTORE_URL", "EMAIL_TRANSPORT", "CLAWBACK_TODAY"):
+    for k in ("DEMO_MODE", "LLM_API_KEY", "LLM_PROVIDER", "SENSO_API_KEY", "SINGLESTORE_URL", "EMAIL_TRANSPORT", "CLAWBACK_TODAY"):
         monkeypatch.delenv(k, raising=False)
 
     from backend.actor.rebuy import set_http_client
@@ -868,3 +868,63 @@ def test_clock_is_real_utc_unless_pinned(monkeypatch):
     assert clock.today() == clock.now().date() and not clock.pinned()
     monkeypatch.setenv("CLAWBACK_NOW", "2026-11-21T00:30:00")  # 4:30 PM PT on the 20th
     assert clock.today().isoformat() == "2026-11-21" and clock.pinned()
+
+
+# ---------- free LLM option: OpenAI-compatible endpoint (local Ollama) ----------
+
+def _fake_openai(reply_args, seen):
+    import httpx
+
+    def handler(req):
+        seen.append((req.url.path, req.headers.get("Authorization"), json.loads(req.content)))
+        msg = {"role": "assistant", "content": ""}
+        if reply_args is not None:
+            msg["tool_calls"] = [{"id": "c1", "type": "function",
+                                  "function": {"name": json.loads(req.content)["tools"][0]["function"]["name"],
+                                               "arguments": reply_args}}]
+        return httpx.Response(200, json={"model": "qwen3:8b", "choices": [{"message": msg, "finish_reason": "tool_calls"}],
+                                         "usage": {"prompt_tokens": 900, "completion_tokens": 40}})
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_openai_compat_llm_drives_a_real_proposal(env):
+    from backend.agent.llm import OpenAICompatLLM, set_llm
+    seen = []
+    args = json.dumps({"action_type": "price_adjust_email", "template": "price_adjust_v1", "alert_at": None,
+                       "reasoning": "The price dropped inside the window. Ask the store for the difference."})
+    llm = OpenAICompatLLM("http://localhost:11434/v1", "qwen3:8b", http=_fake_openai(args, seen))
+    set_llm(llm)
+    r = env.propose("earbuds")
+    assert (r["action_type"], r["decision"], r["status"]) == ("price_adjust_email", "ALLOW", "done")
+    path, auth, body = seen[0]
+    assert path == "/v1/chat/completions" and auth is None  # local Ollama: no key
+    assert body["model"] == "qwen3:8b" and body["tool_choice"] == "auto" and body["temperature"] == 0
+    assert body["tools"][0]["function"]["name"] == "propose_action"
+    assert body["tools"][0]["function"]["parameters"]["required"] == ["action_type", "template", "alert_at", "reasoning"]
+    assert llm.last["usage"]["prompt_tokens"] == 900
+
+
+def test_openai_compat_dict_args_and_no_tool_call(env):
+    from backend.agent.llm import OpenAICompatLLM, set_llm
+    seen = []
+    set_llm(OpenAICompatLLM("http://x/v1", "m", "k", http=_fake_openai(
+        {"action_type": "rebuy_return", "template": None, "alert_at": None, "reasoning": "Return window open."}, seen)))
+    assert env.propose("lamp")["action_type"] == "rebuy_return"
+    assert seen[0][1] == "Bearer k"
+    set_llm(OpenAICompatLLM("http://x/v1", "m", http=_fake_openai(None, seen)))  # never calls the tool
+    assert env.propose("fan")["decision"] == "NO_ACTION"
+
+
+def test_provider_selection(monkeypatch):
+    from backend.agent import llm
+    llm.set_llm(None)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.setenv("LLM_MODEL", "qwen3:4b")
+    o = llm.get_llm()
+    assert isinstance(o, llm.OpenAICompatLLM) and o.base_url == "http://localhost:11434/v1" and o.model == "qwen3:4b"
+    monkeypatch.setenv("LLM_PROVIDER", "rules")
+    assert isinstance(llm.get_llm(), llm.RuleBasedLLM)
+    monkeypatch.delenv("LLM_PROVIDER")
+    assert isinstance(llm.get_llm(), llm.RuleBasedLLM)  # no key, no provider -> offline rules
