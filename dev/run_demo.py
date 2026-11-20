@@ -5,6 +5,11 @@ one plain line per item (team spec 3.10 words).
     python -m dev.run_demo --fixture-policies  # TEST FIXTURE text for Target/Best Buy (not real)
 """
 import os
+
+# Dev tools seed the STAND-IN world (dev/stubs), so they must use the stand-in db + gate pair:
+# with A's backend/db.py present, deps would otherwise pair it with Siva's real gate (no such table: pacts).
+os.environ.setdefault("CLAWBACK_USE_STUBS", "1")
+
 import shutil
 import sys
 from pathlib import Path
@@ -14,6 +19,9 @@ os.environ.setdefault("DEMO_USER_EMAIL", "demo-user@clawback.test")
 os.environ.setdefault("DEMO_ALLOWED_RECIPIENTS",
                       f"{os.environ['DEMO_SUPPORT_INBOX']},{os.environ['DEMO_USER_EMAIL']}")
 os.environ.setdefault("OUTBOX_DIR", "outbox")
+# run_demo RESETS its database. Never let that be A's real one (dev/clawback.db, or whatever a
+# teammate's .env points CLAWBACK_DB at): always use a throwaway file of its own.
+os.environ["CLAWBACK_DB"] = os.path.join("dev", "run_demo.db")
 os.environ.pop("LLM_API_KEY", None) if "--llm" not in sys.argv else None
 
 from fastapi.testclient import TestClient  # noqa: E402

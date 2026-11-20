@@ -298,10 +298,14 @@
   }
   function analyticsPanel(d) {
     return panel("Analytics", "Amplitude: dashboard link and today's event counts.", d, function () {
-      var s = d.status || {}, counts = Object.keys(d.today_counts || {});
+      var s = d.status || {}, ag = d.agent_analytics || {}, gt = d.gates || {}, counts = Object.keys(d.today_counts || {});
       return [h("dl", { class: "uh-kv" },
         h("dt", null, "Amplitude"), h("dd", null, s.enabled ? pill("ok", "sending") : pill("ask", "no API key: counting locally only"), " ",
           h("span", { class: "uh-mono" }, "sent " + (s.sent || 0) + " \u00b7 failed " + (s.failed || 0) + (s.last_error ? " \u00b7 " + s.last_error : ""))),
+        h("dt", null, "Agent Analytics"), h("dd", null, ag.configured ? pill("ok", "sending") : pill("ask", "no AMPLITUDE_AI_API_KEY"), " ",
+          h("span", { class: "uh-mono" }, "sent " + (ag.sent || 0) + " \u00b7 failed " + (ag.failed || 0) + (ag.last_error ? " \u00b7 " + ag.last_error : ""))),
+        h("dt", null, "Feature gates"), h("dd", null, gt.connected ? pill("ok", "Statsig connected") : pill("ask", gt.configured ? "Statsig not reachable" : "no STATSIG_SERVER_SECRET: defaults used"),
+          gt.problem ? h("span", { class: "uh-mono" }, " " + gt.problem) : null),
         h("dt", null, "Dashboard"), h("dd", null, d.dashboard_url ? h("a", { href: d.dashboard_url, target: "_blank", rel: "noreferrer noopener" }, "Open the Amplitude dashboard") :
           h("span", { class: "uh-mono" }, "AMPLITUDE_DASHBOARD_URL not set"))),
         counts.length ? h("div", { class: "uh-scroll" }, h("table", null, h("thead", null, h("tr", null, h("th", { scope: "col" }, "event"), h("th", { scope: "col" }, "today"))),

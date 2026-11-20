@@ -1,0 +1,93 @@
+{
+  "evaluation": {
+    "origin": "native_library",
+    "kind": "evaluation",
+    "id": "c71d15d3-17e0-45d8-9488-59422d5823e6",
+    "revision": 1,
+    "digest": "2c2ba0bfb92eda15ad92db03de8102be4a9c006fbf782232adda8143aa5bbbe7"
+  },
+  "persona-S1": {
+    "origin": "native_library",
+    "kind": "persona",
+    "id": "c407af45-3ba5-422c-93cd-385a94e57c47",
+    "revision": 1,
+    "digest": "55e642cc92897c10633e2b24b5e57c8643452cf9a16921ae0b03d201079ffbec"
+  },
+  "persona-S2": {
+    "origin": "native_library",
+    "kind": "persona",
+    "id": "7b0e5b4a-8d44-4f32-ab60-9957a5415cc5",
+    "revision": 1,
+    "digest": "9bf955317a4fdcbe0d283d9105df27e5511b72dc2dfa7d25bb9ac362cbb25019"
+  },
+  "persona-S3": {
+    "origin": "native_library",
+    "kind": "persona",
+    "id": "374f088c-cc56-4a52-a965-7a8ae6bcb352",
+    "revision": 1,
+    "digest": "2be668ddd7fb7eeecf961f76f9c8da7212b200c4109dc3cfff20b55dcbd8acad"
+  },
+  "persona-S4": {
+    "origin": "native_library",
+    "kind": "persona",
+    "id": "92efe8d7-35d0-4e11-9564-6a728ffb5f69",
+    "revision": 1,
+    "digest": "1754cb3b13b921cea3afdc04b84aea03b2cb04cb19042bb655473936700f646e"
+  },
+  "persona-S5": {
+    "origin": "native_library",
+    "kind": "persona",
+    "id": "3b177a73-3e3d-4b63-94f5-2421e53e7303",
+    "revision": 1,
+    "digest": "49bfe54b47da6e572f926dfc4a084471a0c2c6488793ad00e77397bc6078289d"
+  },
+  "persona-S6": {
+    "origin": "native_library",
+    "kind": "persona",
+    "id": "a9867eda-ea73-43eb-b6e9-a02062d689aa",
+    "revision": 1,
+    "digest": "acd8ef834173fe1495b73c906c9abb0c54c3c2c527d6eefe201088d098573f66"
+  },
+  "scenario-S1": {
+    "origin": "native_library",
+    "kind": "scenario",
+    "id": "09cd1aa9-a956-40fd-baa7-e146343d92f6",
+    "revision": 1,
+    "digest": "ddd1e42470c6719bd65fdddcbff2e90b968c77a9d7c13ad2424c92835dd17b1c"
+  },
+  "scenario-S2": {
+    "origin": "native_library",
+    "kind": "scenario",
+    "id": "354267c7-673e-4768-8808-4e44da248eb4",
+    "revision": 1,
+    "digest": "95d55a5ce3eb1486a24a0994284fd53b1c9f2b5498f86dae9a64c36f45f2b7d8"
+  },
+  "scenario-S3": {
+    "origin": "native_library",
+    "kind": "scenario",
+    "id": "a27207ac-1178-4394-8e72-f5d737783fde",
+    "revision": 1,
+    "digest": "f0692b7c98125a2a2b7ff18e89b09bb17925c06fa310941fce871827882f4e1d"
+  },
+  "scenario-S4": {
+    "origin": "native_library",
+    "kind": "scenario",
+    "id": "1f4b92da-7173-4c23-8b68-b2103e5df356",
+    "revision": 1,
+    "digest": "fb94aa3c996584a6909fdb500e58320a3d4bf9e444eef00cdeda576df67c052c"
+  },
+  "scenario-S5": {
+    "origin": "native_library",
+    "kind": "scenario",
+    "id": "f5fb9621-a8ba-4f46-8555-7a781340093d",
+    "revision": 1,
+    "digest": "ceeae0f571aa0370c9479f24038a06fd9cd9e6f123cbf6af92311269a6978456"
+  },
+  "scenario-S6": {
+    "origin": "native_library",
+    "kind": "scenario",
+    "id": "5745818a-7f23-44af-96fb-cf2c188067af",
+    "revision": 1,
+    "digest": "b165cb83212c2fc1b8a0e23c090cb9463ce2a40d4cf20a2c3165f1bd8b5afcfe"
+  }
+}

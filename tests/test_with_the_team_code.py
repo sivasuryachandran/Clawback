@@ -35,6 +35,7 @@ def app(tmp_path_factory):
     env.pop("CLAWBACK_USE_STUBS", None)      # set by tests/conftest.py for B's unit tests; the real stack must not inherit it
     env.pop("PERSONA_API_KEY", None)
     env.pop("LLM_API_KEY", None)
+    env.pop("CLAWBACK_USE_STUBS", None)        # tests/conftest.py sets it for the unit tests; the real stack must not inherit it
     # The child's output goes to a FILE, never a pipe nobody reads: a full 64 KB pipe blocks the child on write and freezes the app
     # (failed webhooks print long tracebacks, and enough of them filled the pipe).
     log_path = tmp / "app.log"
@@ -74,8 +75,17 @@ def demo(app):
     Runs are spaced a second apart, as a person's reset and re-run would be (the database stamps whole seconds)."""
     time.sleep(max(0.0, 1.1 - (time.time() - _last_run["t"])))
     _last_run["t"] = time.time()
+    # ORDER MATTERS with the stand-in database: the mock store's reset announces its old prices (lamp $239 ...) to the watcher,
+    # which records them as the newest price. Reset the store first and let that webhook land, THEN reseed the database, or the
+    # stale $239 outranks the seeded $199 and the lamp stops on R8 instead of asking.
+    log = lambda: app.get("/mock/api/webhook-log").json()["deliveries"]
+    before = len(log())
+    changed = app.post("/mock/api/reset").json()["changed"]
+    for _ in range(100):
+        if len(log()) >= min(30, before + changed):
+            break
+        time.sleep(0.1)
     assert app.post("/dev/reset").status_code == 200
-    assert app.post("/mock/api/reset").status_code == 200
     runs = app.post("/dev/run-all").json()
     return app, runs
 

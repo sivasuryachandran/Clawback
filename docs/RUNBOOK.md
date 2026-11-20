@@ -32,12 +32,16 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
 
 ## Before every rehearsal and the real demo
 
-1. `Reset to seed` on `/mock/admin` (also tells A's watcher the prices went back up). With the dev stand-in database also `POST /dev/reset`.
-2. `python scripts/preflight.py` has no FAIL lines (WARNs about modules that have not landed are fine).
-3. Demo support inbox open on the **second screen**; Persona sandbox works.
-4. Stage the demo state with **"1. Pre-stage (all but the earbuds)"**: lamp $199, Blue backpack $64, fan $39. The earbuds stay at $129.99 for the live drop.
-5. `DEMO_MODE` is on, and `DEMO_ALLOWED_RECIPIENTS` has only the support inbox and the demo user's address.
-6. Afterwards: the Gmail **Sent** folder has nothing outside `DEMO_ALLOWED_RECIPIENTS`.
+1. `Reset to seed` on `/mock/admin` (also tells A's watcher the prices went back up). With the dev stand-in database, **then** `POST /dev/reset`, in that order and a few seconds
+   apart: the store's reset announces its old prices (lamp $239) to the watcher, and if the database is reseeded *before* that arrives, the stale $239 outranks the seeded $199 and the
+   lamp stops on R8 instead of asking (no approval card). Check with `GET /approvals`: it must list the lamp.
+2. **One clock for the whole app.** The gate and B's agent both follow `CLAWBACK_NOW` / `CLAWBACK_TODAY`. UTC flips to Nov 21 at 4:00 PM PT, right at the code freeze, so for the final
+   recording set the same value for every process, e.g. `export CLAWBACK_NOW=2026-11-20T12:00:00` (before starting the API), and leave it set until the video is done.
+3. `python scripts/preflight.py` has no FAIL lines (WARNs about modules that have not landed are fine).
+4. Demo support inbox open on the **second screen**; Persona sandbox works.
+5. Stage the demo state with **"1. Pre-stage (all but the earbuds)"**: lamp $199, Blue backpack $64, fan $39. The earbuds stay at $129.99 for the live drop.
+6. `DEMO_MODE` is on, and `DEMO_ALLOWED_RECIPIENTS` has only the support inbox and the demo user's address.
+7. Afterwards: the Gmail **Sent** folder has nothing outside `DEMO_ALLOWED_RECIPIENTS`.
 
 ## The 90-second script (from the build doc) and what C presses
 
@@ -88,6 +92,26 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
      `seed != true` to each (or use a separate test project). Every sample event is tagged `seed=true` and `user_id=u_seed`, and is not counted in Under the hood.
 3. Paste the dashboard's share link in `AMPLITUDE_DASHBOARD_URL` (it shows on Under the hood → Analytics).
 4. Screenshot the dashboard for the submission. (Amplitude alone covers the "Amplitude or Statsig" prize.)
+
+## Optional: Statsig gate + Amplitude Agent Analytics (both are no-ops without their keys)
+
+1. Statsig: create a project, copy the **Server Secret Key** (API keys page) into `STATSIG_SERVER_SECRET`. Create a Feature Gate named `proposal_prompt_v2`,
+   add a rule (e.g. pass for a teammate's user id, or 100% of `u_demo`) and press **Save**. A new gate stays `false` until a rule is saved.
+2. Agent Analytics: in your Amplitude project turn on Agent Analytics and copy its project API key into `AMPLITUDE_AI_API_KEY` (this is not `AMPLITUDE_API_KEY`).
+3. Check: `python scripts/sponsor_smoke.py` (sends nothing), then `python scripts/sponsor_smoke.py --send` (one tagged test conversation + one gate check).
+   Amplitude never reports a wrong key back, so confirm the `smoke-test` session appears in Agent Analytics. A wrong Statsig secret is reported.
+4. Under the hood → Analytics shows both as on or off.
+5. Teammate B uses them in the proposal step (see docs/C_CONTRACTS.md section 8b). The demo story: put the new prompt/model behind the gate, enable it for
+   a teammate, show the conversations and failures in Agent Analytics, then keep it enabled or switch the gate off.
+
+## Start Airbyte on the demo laptop (only if a real Gmail read/send will run live)
+
+1. Install once: `curl -LsfS https://get.airbyte.com | bash -`  (installs `abctl`).
+2. Start it: `abctl local install --port 8100`  (first run takes several minutes; needs Docker running).
+3. Open the UI at http://localhost:8100 and sign in with the credentials `abctl local credentials` prints.
+4. Connect the Gmail source to the demo inbox (the support inbox and the demo user's address are the only recipients allowed).
+5. Teammate B's `dev/airbyte_send_check.py` refuses to send unless the demo safety checks hold; run it once before the recording.
+6. Do all of this before the freeze: if it is not working by 3:30 PM, drop Airbyte from the README and demo with the file outbox.
 
 ## Phone / tunnel (optional; the demo is PC only)
 

@@ -10,6 +10,10 @@ import time
 
 import pytest
 
+# backend/main.py calls load_dotenv(). A developer's real .env (blank allow-list, a fixed CLAWBACK_TODAY ...) must never change what the
+# tests see, in this process or in the app subprocesses the end-to-end tests start (they inherit this variable).
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+
 _started = {"t": None}
 
 

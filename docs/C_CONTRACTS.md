@@ -164,6 +164,20 @@ once, whenever `/stats` is polled (the home screen does that every few seconds).
 (rehearsals!) is counted again instead of being swallowed, and Amplitude's `insert_id` is stable per occurrence so a restart can never double-count.
 Keys named `email, to, body, text, subject, pact_text, token, api_key, secret, signature, password` are dropped before anything leaves the machine.
 
+## 8b. Optional for B: feature gate and Agent Analytics (both no-ops without keys; they never raise)
+
+```python
+from backend.analytics.gates import gate_enabled
+from backend.analytics.agent_analytics import track_exchange
+
+use_v2 = gate_enabled("proposal_prompt_v2", user_id="u_demo")            # False unless Statsig is configured and the rule passes
+# ... call the LLM with the old or the new prompt/model depending on use_v2 ...
+track_exchange(session_id=f"opp-{opportunity_id}", user_text="<short description of the prompt>", ai_text="<the chosen action>",
+               model=model_id, provider="anthropic", latency_ms=ms, tool_calls=[("propose_action", ms, ok)])
+```
+
+Pass short text, not raw receipts or support replies (emails are masked and text is cut to 500 characters anyway). `track_exchange` sends from a background thread.
+
 ## 9. Endpoints and pages C owns
 
 | Endpoint | Returns |
