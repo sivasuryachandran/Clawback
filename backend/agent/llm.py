@@ -35,8 +35,24 @@ class AnthropicLLM:
                 max_retries=1)
         return self._client
 
+    last: dict = {}  # timing / usage / stop reason of the last call, for the live check
+
     def call_tool(self, system, user, tool, facts):
-        resp = self.client.beta.messages.create(
+        import time
+        t = time.time()
+        resp = self._create(system, user, tool)
+        self.last = {"ms": int((time.time() - t) * 1000), "stop_reason": resp.stop_reason,
+                     "model": getattr(resp, "model", self.model),
+                     "usage": getattr(resp, "usage", None) and resp.usage.to_dict()}
+        if resp.stop_reason == "refusal":
+            return None
+        for block in resp.content:
+            if block.type == "tool_use" and block.name == tool["name"]:
+                return dict(block.input)
+        return None
+
+    def _create(self, system, user, tool):
+        return self.client.beta.messages.create(
             model=self.model,
             max_tokens=4000,
             betas=["server-side-fallback-2026-07-01"],
@@ -47,12 +63,6 @@ class AnthropicLLM:
             tool_choice={"type": "auto"},
             messages=[{"role": "user", "content": user}],
         )
-        if resp.stop_reason == "refusal":
-            return None
-        for block in resp.content:
-            if block.type == "tool_use" and block.name == tool["name"]:
-                return dict(block.input)
-        return None
 
 
 class RuleBasedLLM:
