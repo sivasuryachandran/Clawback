@@ -17,7 +17,7 @@ and email stores on its own is one prompt-injection away from a bad day.
 ## How it works
 
 1. **Read receipts.** An Airbyte sync moves the order emails into a destination; our code reads them from there and stores them in SingleStore. (Read only: Airbyte does not send anything.)
-2. **Understand them.** A small Arcee model extracts store, item, SKU/UPC, color/size, price and dates.
+2. **Understand them.** A parser extracts store, item, SKU/UPC, color/size, price and dates (an Arcee model when credits are available; an offline fallback otherwise).
 3. **Find the current listing.** Superlinked SIE embeds titles, SingleStore vector search finds candidates, SIE reranks them.
    The matcher only *suggests*; it never decides two items are the same.
 4. **Notice a change.** The Mock Store sends a signed webhook on every price change. Any drop, or a return window closing
@@ -85,7 +85,7 @@ We focus on five sponsors. A row is only a claim once that sponsor has run live 
 | Amplitude | Dashboard: dollars recovered, decision mix (Done / Needs your OK / Stopped), stop reasons by rule |
 | SingleStore | All data; Under the hood → Live queries ("what the Pact stopped this week") |
 | Persona | Verify before signing; fresh re-check when approving money |
-| Arcee | Receipt parsing; cost per receipt on Under the hood → Ingest |
+| Arcee | Receipt parsing is an offline parser fallback until Arcee credits arrive; cost per receipt on Under the hood → Ingest if it runs |
 | Senso | The store's policy quoted in every Why? panel; Under the hood → Policy |
 
 ## Run it
@@ -131,9 +131,9 @@ The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voic
 
 | | |
 |---|---|
-| **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events: a full demo run on Nov 20 sent 18 events (0 failed) and the Amplitude dashboard shows them (decision mix 3 / 2 / 1, stops R4 / R5 / R8, $74 recovered), run on the mock store and the stand-in database `[re-check after the recorded run]`; an Airbyte Core sync from a **file source** (the dummy receipts) that `backend/ingest/airbyte_core.py` reads into the database (the Gmail link itself is simulated, and nothing is sent through Airbyte) `[Siva: keep only if the sync ran and the reader printed "read N from Airbyte"]`; the free NVIDIA-hosted LLM for proposals `[keep only if it ran live: the code on main does not name it yet, so B must confirm]` |
-| **Real only once it has run live** | SingleStore, Persona (sandbox), Arcee and Senso. `[Tick each one after it ran live in the recording; delete any that did not.]` |
-| **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); offline vector and parser fallbacks; the in-memory stand-in database when SingleStore is not connected |
+| **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events: a full demo run on Nov 20 sent 18 events (0 failed) and the Amplitude dashboard shows them (decision mix 3 / 2 / 1, stops R4 / R5 / R8, $74 recovered), run on the mock store and the stand-in database `[re-check after the recorded run]`; an Airbyte Core sync from a **file source** (the dummy receipts) that `backend/ingest/airbyte_core.py` reads into the database (the Gmail link itself is simulated, and nothing is sent through Airbyte) `[Siva: keep only if the sync ran and the reader printed "read N from Airbyte"]`; the free NVIDIA-hosted LLM for proposals and replies (`nvidia/nemotron-3.5-lightning-30b-a3b` through NVIDIA's OpenAI-compatible API): in Teammate B's live check on Siva's laptop it made 6 proposal calls at about 4.5 s each, and a "please send proof" reply was sent in the same thread. In that check the two prompt-injection replies and the store-credit offer came back as "escalate to the user" (escalated to the user, nothing sent), not as a visible gate stop `[update this line if the R13 stop shows up]` |
+| **Real only once it has run live** | SingleStore (not live from Siva's laptop yet: say "live" only if Teammate A's screenshots show it running), Persona (sandbox) and Senso. `[Tick each one after it ran live; delete any that did not.]` |
+| **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); offline vector fallbacks; **Arcee receipt parsing is an offline parser fallback** (no Arcee credits yet; change this only if that changes); the in-memory stand-in database when SingleStore is not connected |
 | **Not claimed** | Superlinked, Firedrill and Guild are not part of this submission |
 
 The signing helpers (`backend/pact/sign.py`) and the sphere visuals (`frontend/orb.js`) were adapted from Siva's earlier Pact project.
