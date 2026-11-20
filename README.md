@@ -78,17 +78,15 @@ clearance and gift cards · only if I save at least $10 · ask me first above $1
 
 ## Where each sponsor shows
 
+We focus on five sponsors. A row is only a claim once that sponsor has run live in the recorded demo (see "Real vs simulated").
+
 | Sponsor | Where a judge sees it |
 |---|---|
-| Senso | The store's policy quoted in every Why? panel; Under the hood → Policy |
-| Persona | Verify before signing; fresh re-check when approving money; messages name the verified user |
-| SingleStore | All data; vector match; Under the hood → Live queries ("what the Pact stopped this week") |
-| Airbyte | Gmail connector reads receipts and sends the mock-store claim email; Under the hood → Ingest |
-| Superlinked (SIE) | Embeddings and rerank scores; Under the hood → Matching |
-| Amplitude | Dashboard: dollars recovered, decision mix, stop reasons |
+| Amplitude | Dashboard: dollars recovered, decision mix (Done / Needs your OK / Stopped), stop reasons by rule |
+| SingleStore | All data; Under the hood → Live queries ("what the Pact stopped this week") |
+| Persona | Verify before signing; fresh re-check when approving money |
 | Arcee | Receipt parsing; cost per receipt on Under the hood → Ingest |
-| Firedrill | Adversarial scenarios with a true pass rate *(if it shipped)* |
-| Guild | The "Stopped by your rules" moment, and asking the sphere "why did you stop the backpack?" |
+| Senso | The store's policy quoted in every Why? panel; Under the hood → Policy |
 
 ## Run it
 
@@ -127,14 +125,19 @@ python3 frontend/serve.py        # the app on http://localhost:3000   (second te
 pytest -q
 ```
 
-The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voice, and end-to-end runs of the real app. `503 passed, 1 skipped`, with 45 failing in `tests/test_agent.py` (the agent tests against the new database schema, still being fixed). `[Refresh this line at 4:00.]`
+The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voice, and end-to-end runs of the real app. `561 passed, 1 skipped` on Python 3.11 and 3.12. `[Refresh this line at 4:00.]`
 
 ## Real vs simulated
 
-- **Real:** Gmail ingest and sending through Airbyte, SingleStore, SIE, Senso, Persona (sandbox), the gate.
-- **Simulated:** the Mock Store's prices, the store's support rep (a teammate inbox), and the Best Buy and Target prices
-  (fetched once and cached). Real stores never receive email; they get a claim packet the user submits through the store's chat.
-- **While A's database is missing:** `backend/dev_app.py` runs everyone's real code on an in-memory stand-in database seeded with the demo rows.
+| | |
+|---|---|
+| **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events (`[confirm after the demo run that the dashboard shows them]`) |
+| **Real only once it has run live** | SingleStore, Persona (sandbox), Arcee and Senso. `[Tick each one after it ran live in the recording; delete any that did not.]` |
+| **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); the in-memory stand-in database when SingleStore is not connected |
+| **Not claimed** | Airbyte, Superlinked, Firedrill and Guild are not part of this submission |
+
+The signing helpers (`backend/pact/sign.py`) and the sphere visuals (`frontend/orb.js`) were adapted from Siva's earlier Pact project.
+Real stores never receive email: they get a claim packet the user submits through the store's chat.
 
 ## Honest scope
 

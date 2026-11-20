@@ -32,12 +32,16 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
 
 ## Before every rehearsal and the real demo
 
-1. `Reset to seed` on `/mock/admin` (also tells A's watcher the prices went back up). With the dev stand-in database also `POST /dev/reset`.
-2. `python scripts/preflight.py` has no FAIL lines (WARNs about modules that have not landed are fine).
-3. Demo support inbox open on the **second screen**; Persona sandbox works.
-4. Stage the demo state with **"1. Pre-stage (all but the earbuds)"**: lamp $199, Blue backpack $64, fan $39. The earbuds stay at $129.99 for the live drop.
-5. `DEMO_MODE` is on, and `DEMO_ALLOWED_RECIPIENTS` has only the support inbox and the demo user's address.
-6. Afterwards: the Gmail **Sent** folder has nothing outside `DEMO_ALLOWED_RECIPIENTS`.
+1. `Reset to seed` on `/mock/admin` (also tells A's watcher the prices went back up). With the dev stand-in database, **then** `POST /dev/reset`, in that order and a few seconds
+   apart: the store's reset announces its old prices (lamp $239) to the watcher, and if the database is reseeded *before* that arrives, the stale $239 outranks the seeded $199 and the
+   lamp stops on R8 instead of asking (no approval card). Check with `GET /approvals`: it must list the lamp.
+2. **One clock for the whole app.** The gate and B's agent both follow `CLAWBACK_NOW` / `CLAWBACK_TODAY`. UTC flips to Nov 21 at 4:00 PM PT, right at the code freeze, so for the final
+   recording set the same value for every process, e.g. `export CLAWBACK_NOW=2026-11-20T12:00:00` (before starting the API), and leave it set until the video is done.
+3. `python scripts/preflight.py` has no FAIL lines (WARNs about modules that have not landed are fine).
+4. Demo support inbox open on the **second screen**; Persona sandbox works.
+5. Stage the demo state with **"1. Pre-stage (all but the earbuds)"**: lamp $199, Blue backpack $64, fan $39. The earbuds stay at $129.99 for the live drop.
+6. `DEMO_MODE` is on, and `DEMO_ALLOWED_RECIPIENTS` has only the support inbox and the demo user's address.
+7. Afterwards: the Gmail **Sent** folder has nothing outside `DEMO_ALLOWED_RECIPIENTS`.
 
 ## The 90-second script (from the build doc) and what C presses
 
