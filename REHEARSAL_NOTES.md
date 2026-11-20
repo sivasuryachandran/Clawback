@@ -5,7 +5,7 @@ This file is what comes to the event; the code stays home.
 
 ## Results
 
-- `pytest -q`: **35 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
+- `pytest -q`: **40 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
 - `python -m dev.run_demo` (6 s) with the real `seed/policies`:
 
 ```
@@ -122,6 +122,32 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
   → R6; a slow source times out; preflight green with fixtures; preflight catches a missing
   inbox and missing policy text).
 
+## Correctness fixes (second pass)
+
+- **The quote now matches the action.** check_policy runs once before propose (a date-based
+  guess, so the LLM sees a quote). If the proposed action needs a different question, it runs
+  again with `check_policy(id, action)`: the adjust window for claims and follow-ups, the
+  return window for rebuys and alerts. The gate and the Why? panel read the latest row, so the
+  quoted sentence is the one that decides. `warm_policies()` now warms both questions per
+  item. The 3.4 contract is unchanged (`action` is an optional extra argument).
+- **Replies fetch a fresh quote.** handle_reply calls `check_policy(id, "claim_followup")`
+  before gating, so a reply that comes more than 24 hours after the claim no longer stops on
+  R6 because of an old citation. If Senso is down then, it still stops on R6 (the reused
+  citation keeps its real age).
+- **Real email replies have a way in.** `backend/agent/inbox.py` + `POST /replies/poll`. A
+  reader returns new messages; only messages in threads WE started are handled; our own sender
+  is ignored (no loops); each message is handled once. FileInboxReader (tonight): drop a `.eml`
+  into `inbox/`; the thread comes from `X-Clawback-Thread` or from `In-Reply-To` matched
+  against the Message-IDs in `outbox/`; the file moves to `inbox/processed|ignored|failed/`.
+  **GmailInboxReader is not wired.** At the event: read our claim threads (Airbyte read side
+  or the Gmail API), dedupe on the Gmail message id, and make sure the Gmail threadId equals
+  what send_email stored in `messages.thread_id`. The sender's From header goes to the LLM as
+  untrusted context only (`handle_reply(..., sender=)`, an optional extra argument).
+- **Still open (a decision, not code):** with a real model, the injection reply will probably
+  be escalated instead of stopped by the gate. Run it once with a key and decide which story
+  the stunt tells.
+- Tests: **40 passing** (5 new + the live-edit test updated).
+
 ## Things in the team spec that looked wrong or unclear
 
 1. **Spec location:** the prompt said `docs/clawback-team-split.md`; the file is at the repo
@@ -142,8 +168,8 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
    window closed and proposes **rebuy_return at $95.99**, which is under the $150 ask-first
    limit, so the gate **ALLOWS an automatic rebuy**. To show R7 quoting the new sentence,
    re-gate the *stored* price_adjust_email proposal (`test_live_edit_14_to_7` does exactly
-   that). Also, check_policy then asks the return-window question, so the quoted sentence is
-   "Returns 30 days from delivery", not the edited one. Decide the stunt script beforehand.
+   that). Since the second pass, re-checking the policy for the claim's action quotes the edited
+   7-day sentence. Decide the stunt script beforehand.
 6. **`record()` has no update path** for the action result after execute_once, and 3.6 shows
    two `record` calls, which would double the audit rows. B does
    `UPDATE audit_log SET action_result` by id. Ask Siva for `record_result(audit_id, result)`.
@@ -156,8 +182,7 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
     delivery (chosen so the alert fires); Best Buy adjust 15 days from purchase, return 15 days
     from delivery. **Confirm from the official pages.** If Target's real return window is
     longer, the "Return closes soon" seed item needs a different purchase date.
-11. **R6 freshness on follow-ups:** follow-ups reuse the claim's citation. A reply that arrives
-    more than 24 h later will stop on R6. Consider re-running `check_policy` inside `handle_reply`.
+11. ~~R6 freshness on follow-ups~~: fixed, handle_reply re-runs check_policy (see above).
 12. **`accept_offer`** isn't defined beyond its name. B marks the item `got_money_back` and
     sends nothing.
 13. **R1 and R8a** were left out of the rehearsal gate (the prompt's rule list omits them). The

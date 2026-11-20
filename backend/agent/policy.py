@@ -31,16 +31,30 @@ def adjust_window_open(item: dict, policy: dict) -> bool:
     return end >= clock.today()
 
 
-def question_for(opp: dict, item: dict, policy: dict | None) -> str:
+ADJUST_ACTIONS = {"price_adjust_email", "claim_packet", "claim_followup"}
+RETURN_ACTIONS = {"rebuy_return", "deadline_alert"}
+
+
+def question_for(opp: dict, item: dict, policy: dict | None, action: str | None = None) -> str:
+    """One narrow question. With `action`, the question matches what the gate will judge
+    (adjust window for claims/follow-ups, return window for rebuys/alerts), so the quote in
+    the Why? panel is the sentence that actually decides it. Without `action` (before the
+    proposal exists) we guess from the dates."""
     name = STORE_NAMES.get(item["store"], item["store"])
     finals = json.loads(policy["final_sale_categories"]) if policy and isinstance(
         policy["final_sale_categories"], str) else (policy or {}).get("final_sale_categories") or []
     cat = item["category"]
+    adjust_q = f"Does {name} adjust prices after purchase for {cat} items, and for how long?"
+    return_q = f"How long is the {name} return window for {cat} items, and when does it start?"
     if cat in finals:
         return f"Is {cat} final sale at {name}?"
+    if action in ADJUST_ACTIONS:
+        return adjust_q
+    if action in RETURN_ACTIONS:
+        return return_q
     if opp["kind"] == "deadline" or (policy and not adjust_window_open(item, policy)):
-        return f"How long is the {name} return window for {cat} items, and when does it start?"
-    return f"Does {name} adjust prices after purchase for {cat} items, and for how long?"
+        return return_q
+    return adjust_q
 
 
 _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="policy")
@@ -70,10 +84,21 @@ def _insert(opportunity_id, store, q, r, fetched_at) -> int:
          r.get("source_id") or None, r.get("revision"), fetched_at))
 
 
-def check_policy(opportunity_id: int) -> int:
+def needs_recheck(opportunity_id: int, action: str) -> bool:
+    """True if the latest citation for this opportunity answers a different question than
+    the one that fits `action` (the gate reads the latest row)."""
+    opp, item, policy = _load(opportunity_id)
+    want = question_for(opp, item, policy, action)
+    last = db.query("SELECT question FROM policy_checks WHERE opportunity_id = %s "
+                    "ORDER BY id DESC LIMIT 1", (opportunity_id,))
+    return not last or last[0]["question"] != want
+
+
+def check_policy(opportunity_id: int, action: str | None = None) -> int:
+    """Contract 3.4 is check_policy(opportunity_id); `action` is an optional extra."""
     opp, item, policy = _load(opportunity_id)
     store = item["store"]
-    q = question_for(opp, item, policy)
+    q = question_for(opp, item, policy, action)
     try:
         r = _ask_with_timeout(store, q)
     except Exception as e:  # slow / down / not wired
@@ -98,8 +123,13 @@ def warm_policies() -> list[dict]:
     out = []
     for o in db.query("SELECT id FROM opportunities WHERE status = 'open' ORDER BY id"):
         t = time.time()
-        pc_id = check_policy(o["id"])
-        pc = db.query("SELECT store, question, cited_text, senso_source_id, fetched_at "
-                      "FROM policy_checks WHERE id = %s", (pc_id,))[0]
-        out.append(pc | {"opportunity_id": o["id"], "ms": int((time.time() - t) * 1000)})
+        # Both questions, so a citation exists whichever action gets proposed; the
+        # date-based default goes LAST so it is the latest row (what the gate reads).
+        rows = [check_policy(o["id"], a) for a in ("price_adjust_email", "rebuy_return")]
+        rows.append(check_policy(o["id"]))
+        pcs = [db.query("SELECT store, question, cited_text, senso_source_id, fetched_at "
+                        "FROM policy_checks WHERE id = %s", (i,))[0] for i in rows]
+        cited = all(p["senso_source_id"] for p in pcs)
+        out.append(pcs[-1] | {"opportunity_id": o["id"], "ms": int((time.time() - t) * 1000),
+                              "senso_source_id": pcs[-1]["senso_source_id"] if cited else None})
     return out

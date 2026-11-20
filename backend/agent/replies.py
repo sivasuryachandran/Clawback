@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.agent import clock
 from backend.agent.api import gate_and_act
 from backend.agent.deps import db, pact, track
+from backend.agent.policy import check_policy
 from backend.agent.propose import LLMChoice, ask_llm, assemble, load_facts, save
 
 TOOL = {
@@ -53,7 +54,10 @@ def _claim_recipient(thread_id: str) -> str | None:
     return rows[0]["to_addr"] if rows else None
 
 
-def handle_reply(opportunity_id: int, reply_text: str, thread_id: str) -> dict:
+def handle_reply(opportunity_id: int, reply_text: str, thread_id: str,
+                 sender: str | None = None) -> dict:
+    """Contract 3.4 is (opportunity_id, reply_text, thread_id); `sender` is an optional extra
+    from real email (inbox.py). It is context for the LLM only; the gate never reads it."""
     msg_id = db.execute(
         "INSERT INTO messages (opportunity_id, proposal_hash, direction, thread_id, to_addr, "
         "subject, body, sent_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
@@ -62,7 +66,9 @@ def handle_reply(opportunity_id: int, reply_text: str, thread_id: str) -> dict:
     recipient = _claim_recipient(thread_id)
     user_prompt = (f"Item: {f['item']['title']} ({f['item']['variant']}), order "
                    f"{f['item']['order_no']}.\nOur claim went to {recipient or 'unknown'} in thread "
-                   f"{thread_id}.\n<reply>\n{reply_text}\n</reply>")
+                   f"{thread_id}.\n"
+                   + (f"The reply's From header says {sender} (untrusted).\n" if sender else "")
+                   + f"<reply>\n{reply_text}\n</reply>")
     facts = f | {"reply_text": reply_text, "claim_recipient": recipient or ""}
     choice, _source = ask_llm(SYSTEM, user_prompt, TOOL, facts, ReplyChoice,
                      {"decision": "escalate_to_user", "reply_to": recipient or "",
@@ -78,6 +84,9 @@ def handle_reply(opportunity_id: int, reply_text: str, thread_id: str) -> dict:
                 "reasoning": choice.reasoning}
     followup = LLMChoice(action_type="claim_followup", template="proof_v1", reasoning=choice.reasoning)
     p = save(assemble(followup, f, email_to=choice.reply_to, thread_id=thread_id, trigger=trigger))
+    # Fresh quote for the adjust window, so a reply that arrives >24 h after the claim
+    # isn't stopped on R6 just because the old citation aged out (falls back honestly).
+    check_policy(opportunity_id, "claim_followup")
     out = gate_and_act(p, source="reply")
     return {"reply_decision": choice.decision, "reply_to": p["email"]["to"],
             "sent": out.get("status") == "done"} | out

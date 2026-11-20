@@ -16,7 +16,7 @@ from backend.actor.packet import build_claim_packet
 from backend.actor.rebuy import rebuy_return
 from backend.agent import clock, words
 from backend.agent.deps import db, pact, track
-from backend.agent.policy import check_policy
+from backend.agent.policy import check_policy, needs_recheck
 from backend.agent.propose import USER_ID, propose
 
 router = APIRouter()
@@ -114,8 +114,10 @@ def gate_and_act(p: dict, source: str = "propose") -> dict:
 def propose_endpoint(opportunity_id: int):
     if not db.query("SELECT id FROM opportunities WHERE id = %s", (opportunity_id,)):
         raise HTTPException(404, "no such opportunity")
-    check_policy(opportunity_id)
+    check_policy(opportunity_id)          # first guess from the dates: gives the LLM a quote
     p = propose(opportunity_id)
+    if p["action_type"] != "none" and needs_recheck(opportunity_id, p["action_type"]):
+        check_policy(opportunity_id, p["action_type"])  # the quote that decides THIS action
     return gate_and_act(p) | {"reasoning": p["reasoning"]}
 
 
@@ -191,3 +193,10 @@ class ReplyIn(BaseModel):
 def replies_inbound(body: ReplyIn):
     from backend.agent.replies import handle_reply
     return handle_reply(body.opportunity_id, body.reply_text, body.thread_id)
+
+
+@router.post("/replies/poll")
+def replies_poll():
+    """Read new real-email replies in our claim threads (inbox.py) and handle each one."""
+    from backend.agent.inbox import poll_replies
+    return poll_replies()
