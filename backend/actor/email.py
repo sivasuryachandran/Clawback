@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Protocol
 
 from backend.agent import clock
-from backend.agent.deps import db
+from backend.agent.deps import db, track
 
 FOOTER_MARK = "Sent by Clawback on behalf of "
 SENDER = "clawback@clawback.test"
@@ -112,12 +112,31 @@ def send_email(decision, to: str, subject: str, body: str, transport, thread_id:
     if FOOTER_MARK not in body:
         raise EmailRefused("body is not from a template")
     h = getattr(decision, "proposal_hash", None)
-    msg_id, thread = transport.send(to_n, subject, body, thread_id)
+    # Order matters for retries (execute_once retries a 'failed' action once):
+    #  1. write the row BEFORE sending: if that fails, nothing went out, a retry is safe;
+    #  2. send: if that fails, remove the row and raise, a retry is safe;
+    #  3. after a successful send NOTHING may raise, or the action is marked failed and the
+    #     retry sends a second email. Bookkeeping errors are tracked, not raised.
+    thread = thread_id or f"thr_{uuid.uuid4().hex[:12]}"  # ours for a new thread
     opp = db.query("SELECT opportunity_id FROM proposals WHERE proposal_hash = %s", (h,))
-    db.execute(
+    row = db.execute(
         "INSERT INTO messages (opportunity_id, proposal_hash, direction, thread_id, to_addr, "
         "subject, body, sent_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-        (opp[0]["opportunity_id"] if opp else None, h, "out", thread, to_n, subject, body, clock.ts()))
+        (opp[0]["opportunity_id"] if opp else None, h, "out", thread, to_n, subject, body, None))
+    try:
+        msg_id, sent_thread = transport.send(to_n, subject, body, thread)
+    except Exception:
+        try:
+            db.execute("DELETE FROM messages WHERE id = %s", (row,))
+        except Exception:
+            pass  # the row keeps sent_at NULL, which readers treat as not sent
+        raise
+    try:
+        # A real Gmail send may assign its own threadId for a new thread: keep the real one.
+        db.execute("UPDATE messages SET thread_id = %s, sent_at = %s WHERE id = %s",
+                   (sent_thread or thread, clock.ts(), row))
+    except Exception as e:
+        track("message_bookkeeping_failed", {"message_row": row, "error": repr(e)[:200]})
     return msg_id
 
 

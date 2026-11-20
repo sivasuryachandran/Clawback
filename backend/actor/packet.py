@@ -30,11 +30,17 @@ def build_claim_packet(decision, opportunity_id: int, transport=None) -> int:
     script = chat_script(f)
     packet = {k: f[k] for k in ("store", "order_no", "order_date", "title", "variant", "paid",
                                 "price", "url", "seen_at", "diff", "quote", "source_url")}
-    pid = db.execute(
-        "INSERT INTO claim_packets (opportunity_id, proposal_hash, store, packet_json, chat_script, "
-        "created_at) VALUES (%s,%s,%s,%s,%s,%s)",
-        (opportunity_id, decision.proposal_hash, f["store"], json.dumps(packet, default=str),
-         script, clock.ts()))
+    # A retry (after a failed send) reuses the packet saved for this proposal: one packet each.
+    existing = db.query("SELECT id, chat_script FROM claim_packets WHERE proposal_hash = %s "
+                        "ORDER BY id LIMIT 1", (decision.proposal_hash,))
+    if existing:
+        pid, script = existing[0]["id"], existing[0]["chat_script"]
+    else:
+        pid = db.execute(
+            "INSERT INTO claim_packets (opportunity_id, proposal_hash, store, packet_json, "
+            "chat_script, created_at) VALUES (%s,%s,%s,%s,%s,%s)",
+            (opportunity_id, decision.proposal_hash, f["store"], json.dumps(packet, default=str),
+             script, clock.ts()))
     subject, body = render("packet_v1", f)
     body = body.replace("{packet}", script)
     send_email(decision, f["user_email"], subject, body, transport or get_transport())

@@ -50,7 +50,7 @@ class ReplyChoice(BaseModel):
 
 def _claim_recipient(thread_id: str) -> str | None:
     rows = db.query("SELECT to_addr FROM messages WHERE thread_id = %s AND direction = 'out' "
-                    "ORDER BY id LIMIT 1", (thread_id,))
+                    "AND sent_at IS NOT NULL ORDER BY id LIMIT 1", (thread_id,))
     return rows[0]["to_addr"] if rows else None
 
 

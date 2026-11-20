@@ -39,6 +39,8 @@ def line_for(key: str, r: dict) -> tuple[str, str]:
     d, a = r["decision"], r["action_type"]
     if d == "NO_ACTION":
         return "Watching", "Watching (nothing to do)"
+    if d == "ALLOW" and r.get("status") == "failed":
+        return "Stopped", f"{words.ERROR_SENTENCE} ({words.FAILED_WORDS})"
     if d == "ALLOW":
         diff = float(f["item"]["price_paid"]) - float(f["history"][0]["price"]) if f["history"] else 0
         text = {

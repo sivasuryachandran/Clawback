@@ -5,7 +5,7 @@ This file is what comes to the event; the code stays home.
 
 ## Results
 
-- `pytest -q`: **40 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
+- `pytest -q`: **48 passed** (about 20–45 s on Windows; most of that is fixture setup, see "Slow").
 - `python -m dev.run_demo` (6 s) with the real `seed/policies`:
 
 ```
@@ -147,6 +147,30 @@ Earbuds reply "we can offer store credit": Needs you: the store offered somethin
   be escalated instead of stopped by the gate. Run it once with a key and decide which story
   the stunt tells.
 - Tests: **40 passing** (5 new + the live-edit test updated).
+
+## Failure paths (third pass)
+
+- **Bug found and fixed: a retry could send the same email twice.** send_email used to send
+  first and save the `messages` row afterwards. If that save failed, the actor raised,
+  execute_once marked the action `failed`, and the allowed retry sent a second email. Now:
+  write the row (sent_at NULL) → send (on failure, delete the row and raise; a retry is
+  safe) → set thread_id + sent_at. **After a successful send nothing raises**: a bookkeeping
+  error is tracked as `message_bookkeeping_failed` and the action still counts as done.
+  Lesson for the event: every actor must never raise after its external side effect.
+- **Claim packets on retry** reuse the packet saved for the same proposal hash (one packet,
+  one email).
+- **Failed actions read plainly:** GET /opportunities shows "Didn't go through" + "Something
+  went wrong on our side. Nothing was sent or bought." (3.10) instead of "Done"; the item's
+  status is unchanged.
+- **Verified by tests:** send fails → nothing sent, no message row, retry sends exactly once,
+  then R11; send fails twice → stays failed; saving fails before the send → nothing sent, retry
+  OK; saving fails after the send → exactly one email and status done; mock store 500 on the
+  lamp → approval stays `approved`, item stays "Needs your OK", re-approving the same approval
+  rebuys once; mock store rejects → neither happened; packet retry → one packet; a failed
+  follow-up doesn't use up one of the 3 replies.
+- **Note for Siva:** these depend on execute_once's "failed → one retry" rule and on R11
+  counting only running/done. If the real gate changes either, re-run these tests.
+- Tests: **48 passing**.
 
 ## Things in the team spec that looked wrong or unclear
 

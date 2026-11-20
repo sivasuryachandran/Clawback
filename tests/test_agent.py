@@ -524,3 +524,131 @@ def test_inbox_poll_handles_real_email_replies(env, tmp_path, monkeypatch):
     assert sorted(p.name for p in (inbox / "processed").iterdir()) == ["1.eml", "2.eml"]
     assert list(inbox.glob("*.eml")) == []
     assert env.client.post("/replies/poll").json() == []  # nothing handled twice
+
+
+# ---------- failure paths: nothing half-done, a retry never sends twice ----------
+
+class FlakyTransport:
+    """Fails the first `fail` sends, then behaves like FileTransport."""
+    def __init__(self, fail=1):
+        from backend.actor.email import FileTransport
+        self.fail, self.inner = fail, FileTransport()
+
+    def send(self, to, subject, body, thread_id):
+        if self.fail:
+            self.fail -= 1
+            raise ConnectionError("simulated Gmail outage")
+        return self.inner.send(to, subject, body, thread_id)
+
+
+def _use_transport(monkeypatch, t):
+    import backend.actor.email as em
+    import backend.actor.packet as pk
+    monkeypatch.setattr(em, "get_transport", lambda: t)
+    monkeypatch.setattr(pk, "get_transport", lambda: t)
+
+
+def _fail_sql(monkeypatch, prefix, times=1):
+    """Make db.execute raise for statements starting with `prefix` (the first `times` calls)."""
+    from dev.stubs import db
+    real, left = db.execute, [times]
+
+    def execute(sql, params=()):
+        if sql.lstrip().startswith(prefix) and left[0]:
+            left[0] -= 1
+            raise RuntimeError(f"simulated DB error on {prefix}")
+        return real(sql, params)
+    monkeypatch.setattr(db, "execute", execute)
+
+
+def test_send_fails_then_retry_sends_once(env, monkeypatch):
+    from backend.agent import words
+    _use_transport(monkeypatch, FlakyTransport(fail=1))
+    r = env.propose("earbuds")
+    assert (r["decision"], r["status"]) == ("ALLOW", "failed")
+    assert env.emails() == []
+    assert q("SELECT COUNT(*) AS n FROM messages")[0]["n"] == 0  # pre-written row removed
+    assert q("SELECT status FROM line_items WHERE sku = 'MS-1001'")[0]["status"] == "watching"
+    assert q("SELECT status FROM executed_actions")[0]["status"] == "failed"
+    view = env.client.get(f"/opportunities/{env.ids['earbuds']}").json()
+    assert (view["decision_words"], view["plain_sentence"]) == (words.FAILED_WORDS, words.ERROR_SENTENCE)
+    r2 = env.propose("earbuds")  # same proposal hash -> execute_once allows one retry
+    assert (r2["decision"], r2["status"]) == ("ALLOW", "done")
+    assert len(env.emails()) == 1
+    assert [x["status"] for x in q("SELECT status FROM executed_actions")] == ["done"]
+    assert q("SELECT status FROM line_items WHERE sku = 'MS-1001'")[0]["status"] == "asked_store"
+    assert env.propose("earbuds")["decision"] == "BLOCK" and len(env.emails()) == 1
+
+
+def test_send_fails_twice_stays_failed_nothing_sent(env, monkeypatch):
+    _use_transport(monkeypatch, FlakyTransport(fail=2))
+    assert env.propose("earbuds")["status"] == "failed"
+    assert env.propose("earbuds")["status"] == "failed"
+    assert env.emails() == []
+
+
+def test_save_before_send_fails_nothing_sent_then_retry(env, monkeypatch):
+    _fail_sql(monkeypatch, "INSERT INTO messages")
+    r = env.propose("earbuds")
+    assert r["status"] == "failed" and env.emails() == []
+    assert env.propose("earbuds")["status"] == "done"
+    assert len(env.emails()) == 1
+
+
+def test_save_after_send_fails_still_exactly_one_email(env, monkeypatch):
+    from dev.stubs.analytics import EVENTS
+    _fail_sql(monkeypatch, "UPDATE messages")
+    r = env.propose("earbuds")
+    assert r["status"] == "done"  # the email went out: never report that as failed
+    assert len(env.emails()) == 1
+    assert any(e == "message_bookkeeping_failed" for e, _ in EVENTS)
+    second = env.propose("earbuds")
+    assert second["decision"] == "BLOCK" or second.get("status") == "already_ran"
+    assert len(env.emails()) == 1
+
+
+def test_rebuy_error_then_retry_on_same_approval(env):
+    import httpx
+    from backend.actor.rebuy import set_http_client
+    env.propose("lamp")
+    [ap] = q("SELECT * FROM approvals")
+    set_http_client(httpx.Client(base_url="http://mock.invalid",
+                                 transport=httpx.MockTransport(lambda req: httpx.Response(500))))
+    a = env.client.post(f"/dev/approve/{ap['id']}").json()
+    assert (a["decision"], a["status"]) == ("ALLOW", "failed")
+    assert env.calls == []
+    assert q("SELECT status FROM approvals")[0]["status"] == "approved"  # not executed
+    assert q("SELECT status FROM line_items WHERE sku = 'MS-2002'")[0]["status"] == "needs_ok"
+    set_http_client(env.client)  # the store is back
+    b = env.client.post(f"/dev/approve/{ap['id']}").json()
+    assert (b["decision"], b["status"]) == ("ALLOW", "done")
+    assert len(env.calls) == 1
+    assert q("SELECT status FROM approvals")[0]["status"] == "executed"
+    assert q("SELECT status FROM line_items WHERE sku = 'MS-2002'")[0]["status"] == "rebought"
+
+
+def test_rebuy_store_rejects_means_neither_happened(env):
+    r = env.client.post("/mock/api/rebuy_return", json={"listing_id": 999, "original_order_no": "MS-55022"})
+    assert r.status_code == 400 and env.calls == []  # mock store: both or neither
+
+
+def test_packet_retry_reuses_one_packet(env, monkeypatch):
+    from dev.stubs import db
+    db.execute("UPDATE price_history SET price = 29.99 WHERE price = 43.99")  # a passing drop
+    _use_transport(monkeypatch, FlakyTransport(fail=1))
+    assert env.propose("bestbuy")["status"] == "failed"
+    r = env.propose("bestbuy")
+    assert r["status"] == "done"
+    assert len(q("SELECT id FROM claim_packets")) == 1
+    assert len(env.emails()) == 1
+
+
+def test_failed_followup_is_not_counted(env, monkeypatch):
+    t = _thread(env)
+    _use_transport(monkeypatch, FlakyTransport(fail=1))
+    r = _reply(env, "Please send proof", t)
+    assert (r["decision"], r["status"], r["sent"]) == ("ALLOW", "failed", False)
+    for i in range(3):  # all three follow-ups are still available
+        assert _reply(env, f"Please send proof ({i})", t)["status"] == "done"
+    assert _reply(env, "Please send proof again", t)["failed_rule"] == "R13"
+    assert q("SELECT status FROM line_items WHERE sku = 'MS-1001'")[0]["status"] == "asked_store"

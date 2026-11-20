@@ -1,6 +1,9 @@
 """Plain words from team spec 3.10. Rule ids never reach default views; these sentences do."""
 from backend.agent.senso_client import STORE_NAMES
 
+ERROR_SENTENCE = "Something went wrong on our side. Nothing was sent or bought."  # 3.10
+FAILED_WORDS = "Didn't go through"
+
 DECISION_WORDS = {"ALLOW": "Done", "ASK": "Needs your OK", "BLOCK": "Stopped by your rules",
                   "NO_ACTION": "Watching"}
 

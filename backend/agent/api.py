@@ -147,6 +147,10 @@ def opportunity_view(opportunity_id: int):
         t["failed_rule"], t["failed_values"] = words.failed(t["rules"])
         t["plain"] = words.rule_sentence(t["failed_rule"], t["failed_values"], o["store"], o["title"])
         t["status_words"] = words.DECISION_WORDS.get(t["decision"], t["decision"])
+        res = json.loads(t["action_result"]) if t["action_result"] else {}
+        t["action_status"] = res.get("status")
+        if res.get("status") == "failed":  # allowed, but the actor failed: say so plainly
+            t["status_words"], t["plain"] = words.FAILED_WORDS, words.ERROR_SENTENCE
     main = [t for t in trail if t["action_type"] != "claim_followup"]
     latest = main[-1] if main else None
     msgs = db.query("SELECT direction, thread_id, to_addr, subject, body, sent_at FROM messages "
