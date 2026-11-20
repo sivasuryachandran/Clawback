@@ -25,3 +25,8 @@ When A lands: delete `backend/dev_app.py`, run `uvicorn backend.main:app`. Nothi
 - **One clock.** B's code uses `backend/agent/clock.py` (fixed 12:00 on CLAWBACK_TODAY); the gate uses real UTC time. Fine on event day; decide one.
 - Scheduler calls `POST /opportunities/{id}/propose` at `CLAWBACK_API_BASE`.
 - Persona: `dev_app` treats every check as approved when no `PERSONA_API_KEY` is set. `main.py` never does.
+
+## Persona Relay (optional live-human check before approving money)
+`backend/persona/relay.py`, mounted through `backend.persona.api` (no change to main.py). Off unless `RELAY_GATEWAY_URL` and `PERSONA_RELAY_API_KEY` are set.
+It needs Persona's Relay Gateway (Docker) because Relay uses Privacy Pass; there is no Python SDK. Built from the docs, covered by unit tests with a fake gateway, never run against the real service.
+When on, `POST /approvals/{id}` returns 403 until `POST /persona/relay/complete` reports `passed` within `RELAY_MAX_AGE_S`. The UI opens Persona's hosted Relay page in a new tab and polls.
