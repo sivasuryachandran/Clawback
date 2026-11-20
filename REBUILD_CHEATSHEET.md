@@ -40,9 +40,12 @@
 ## Day-of run order
 
 1. Start the server.
-2. `python -m dev.preflight --warm --live` and fix every FAIL.
-3. Dry run.
-4. Preflight again about 10 minutes before going on stage (the warm-up restarts the 24 h citation clock).
+2. `pip install anthropic`, put `LLM_API_KEY` in `.env`, run `python -m dev.llm_live_check` once
+   (about 11 calls: does the model match the rules, how does the injection end, ms and tokens).
+   **Never run tonight**, so the strict tool, the `fallbacks` and the `output_config` options are untested.
+3. `python -m dev.preflight --warm --live` and fix every FAIL.
+4. Dry run.
+5. Preflight again about 10 minutes before going on stage (the warm-up restarts the 24 h citation clock).
 
 ## Stunt script (what actually happens)
 

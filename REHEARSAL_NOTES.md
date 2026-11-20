@@ -291,7 +291,8 @@ Consequences:
 - [ ] Paste official Target and Best Buy text and URLs into `seed/policies/*.md` (verbatim), and
       give A the structured values.
 - [ ] Check whether the Airbyte Gmail connector can send; if not, build GmailApiTransport.
-- [ ] Set `LLM_API_KEY` once and run one live proposal to confirm `strict` + `fallbacks` work.
+- [ ] `pip install anthropic`, set `LLM_API_KEY`, run `python -m dev.llm_live_check` (skipped on
+      rehearsal night: no key). It flags provider failures instead of silently falling back.
 - [ ] Agree with Siva on: the re-exports in `backend/pact/__init__.py`, `record_result`, the clock,
       and the R10-vs-R13 wording for the stunt.
 - [ ] Write F1–F10, or drop Firedrill.
