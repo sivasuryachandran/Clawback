@@ -106,7 +106,7 @@ def test_overview_never_calls_the_matcher(sample_db, monkeypatch):
     for _ in range(3):
         o = panels.build(use_sample=False)
     assert calls == [] and o["matching"]["available"] is True and o["matching"]["candidates"] == []
-    assert len(o["matching"]["items"]) == 6 and "DOT_PRODUCT" in o["matching"]["sql"]
+    assert len(o["matching"]["items"]) == 6 and o["matching"]["sql"]   # A's own MATCH_SQL is shown once it exists (DOT_PRODUCT only in the documented fallback)
 
 
 def test_candidates_come_from_the_matcher_once_then_the_cache(sample_db, monkeypatch):
