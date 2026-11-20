@@ -25,6 +25,16 @@ TEMPLATE_FOR = {"price_adjust_email": "price_adjust_v1", "claim_packet": "packet
 
 # ---------- schemas ----------
 
+NULL_WORDS = {"", "none", "null", "n/a", "na", "nil", "undefined"}
+
+
+def null_words_to_none(v):
+    """Some open-weight models write the STRING "None" for an unused optional field."""
+    if isinstance(v, str) and v.strip().lower() in NULL_WORDS:
+        return None
+    return v
+
+
 class LLMChoice(BaseModel):
     """What the LLM is allowed to decide. Extra keys (e.g. a listing_id or price) are DROPPED."""
     model_config = ConfigDict(extra="ignore")
@@ -33,11 +43,7 @@ class LLMChoice(BaseModel):
     alert_at: Optional[date] = None
     reasoning: str = Field(min_length=1, max_length=600)
 
-    @field_validator("template", "alert_at", mode="before")
-    @classmethod
-    def _null_strings(cls, v):
-        """Open-weight models often write the STRING 'None'/'null' for an unused optional field. That means 'no value'."""
-        return None if isinstance(v, str) and v.strip().lower() in ("", "none", "null", "n/a") else v
+    _null_words = field_validator("template", "alert_at", mode="before")(null_words_to_none)
 
     @model_validator(mode="after")
     def _consistent(self):
