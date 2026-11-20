@@ -72,7 +72,7 @@ def _unwrap(rec: dict) -> dict:
 
 
 def _read_jsonl(target: str, stream: str) -> Iterator[dict]:
-    p = Path(target)
+    p = Path(os.path.expandvars(target)).expanduser()   # seed/airbyte_demo/README uses ~/airbyte-local/...
     if p.is_dir():
         files = sorted(f for f in p.rglob("*.jsonl") if stream in f.stem)
     elif p.is_file():
@@ -101,6 +101,7 @@ def _rows_as_dicts(cursor, sql: str) -> Iterator[dict]:
 
 
 def _read_sqlite(target: str, stream: str) -> Iterator[dict]:
+    target = str(Path(os.path.expandvars(target)).expanduser())
     if not Path(target).is_file():
         raise DestinationUnavailable(f"no SQLite file at {target}")
     con = sqlite3.connect(target)
