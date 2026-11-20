@@ -972,3 +972,14 @@ def test_redirect_request_carries_the_address_and_the_gate_refuses(env):
 def test_reply_prompt_tells_the_model_to_pass_redirects_to_the_gate():
     from backend.agent import replies
     assert "DIFFERENT address" in replies.SYSTEM and "deterministic" in replies.SYSTEM
+
+
+def test_llm_choice_treats_string_none_as_no_value():
+    """Open-weight models write 'None'/'null' as text for an unused field; that must not invalidate a correct choice."""
+    from backend.agent.propose import LLMChoice
+    c = LLMChoice.model_validate({"action_type": "none", "template": "None", "alert_at": "null", "reasoning": "final sale"})
+    assert c.template is None and c.alert_at is None
+    c = LLMChoice.model_validate({"action_type": "price_adjust_email", "template": "price_adjust_v1", "alert_at": "None", "reasoning": "drop"})
+    assert c.template == "price_adjust_v1" and c.alert_at is None
+    c = LLMChoice.model_validate({"action_type": "deadline_alert", "template": "None", "alert_at": "2026-11-21", "reasoning": "soon"})
+    assert str(c.alert_at) == "2026-11-21"

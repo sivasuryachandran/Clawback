@@ -96,6 +96,19 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
 3. Paste the dashboard's share link in `AMPLITUDE_DASHBOARD_URL` (it shows on Under the hood → Analytics).
 4. Screenshot the dashboard for the submission. (Amplitude alone covers the "Amplitude or Statsig" prize.)
 
+## Final run on Siva's laptop (one Amplitude project, one run)
+
+**Decision: one project only.** The dashboard must show the events from the final run, so do not split events across two projects. Recommended: the dashboard stays in the project that already has it (Villy's). Villy sends Siva that project's API key **privately** (not in chat, not in a commit), and Siva puts it in his laptop's `.env` as `AMPLITUDE_API_KEY`
+(plus `AMPLITUDE_REGION=eu` only if the project is in the EU data center; the dashboard URL's data center tells you). The alternative is Siva's own project, with the dashboard built there (Siva gives edit access or shares his screen); then Villy's key is not used at all.
+
+1. Siva's `.env`: `AMPLITUDE_API_KEY`, `ANALYTICS_RUN_TAG=final-take` (any new name), `MOCK_WEBHOOK_SECRET`, the demo-safety variables, and the clock: `export CLAWBACK_NOW=2026-11-20T12:00:00` in the shell that starts the API (UTC flips to Nov 21 at 4:00 PM PT).
+2. Start the API (`backend.dev_app`, or `backend.main` on the real seed) and `(cd frontend && python3 serve.py)`.
+3. Reset in this order: mock store `Reset to seed`, wait a few seconds, then `POST /dev/reset`, then `POST /dev/run-all`. `GET /approvals` must list the lamp.
+4. Pre-stage, approve the lamp on screen, then ask the orb two questions ("how much did I get back", "why did you stop the backpack").
+5. Open Under the hood → Analytics: `sent` rises, `failed` stays 0. Wait ~30 seconds.
+6. Amplitude: each chart is filtered to `run_tag = final-take` (Filter by → run_tag) and the date range is **today** (date picker → custom → click today's date twice → Apply). Refresh the dashboard. Expect decision mix 3 / 2 / 1, stops R4 / R5 / R8, $74.
+7. Screenshots: the dashboard, and a "Stopped by your rules" card with its Why? panel open.
+
 ## Optional: Statsig gate + Amplitude Agent Analytics (both are no-ops without their keys)
 
 1. Statsig: create a project, copy the **Server Secret Key** (API keys page) into `STATSIG_SERVER_SECRET`. Create a Feature Gate named `proposal_prompt_v2`,

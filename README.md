@@ -131,10 +131,9 @@ The whole suite: Pact, agent, watch, mock store, analytics, Under the hood, voic
 
 | | |
 |---|---|
-| **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events: a full demo run on Nov 20 sent 18 events (0 failed) and the Amplitude dashboard shows them (decision mix 3 / 2 / 1, stops R4 / R5 / R8, $74 recovered). That run used the mock store and the stand-in database. `[Re-check after the recorded run.]` |
+| **Real** | The deterministic gate and its rules; Pact signing, hashing and revocation (Under the hood re-verifies the signature live); Amplitude events: a full demo run on Nov 20 sent 18 events (0 failed) and the Amplitude dashboard shows them (decision mix 3 / 2 / 1, stops R4 / R5 / R8, $74 recovered), run on the mock store and the stand-in database `[re-check after the recorded run]`; an Airbyte Core sync from a **file source** (the dummy receipts) that `backend/ingest/airbyte_core.py` reads into the database (the Gmail link itself is simulated, and nothing is sent through Airbyte) `[Siva: keep only if the sync ran and the reader printed "read N from Airbyte"]`; the free NVIDIA-hosted LLM for proposals `[keep only if it ran live: the code on main does not name it yet, so B must confirm]` |
 | **Real only once it has run live** | SingleStore, Persona (sandbox), Arcee and Senso. `[Tick each one after it ran live in the recording; delete any that did not.]` |
 | **Simulated** | The Mock Store's prices and orders; the store's support rep (a teammate inbox); cached real-store prices (Target, Best Buy); dummy receipts (`seed/receipts/05` and `06` are labelled dummy purchases); offline vector and parser fallbacks; the in-memory stand-in database when SingleStore is not connected |
-| **Airbyte** | Read path only. Counts only if a real Airbyte sync ran and `python -m backend.ingest.airbyte_core` read its output into the database before the freeze. The seed receipts are dummy purchases, so the Gmail link itself is simulated. Nothing is sent through Airbyte. `[Keep only if it ran; otherwise delete this row.]` |
 | **Not claimed** | Superlinked, Firedrill and Guild are not part of this submission |
 
 The signing helpers (`backend/pact/sign.py`) and the sphere visuals (`frontend/orb.js`) were adapted from Siva's earlier Pact project.
