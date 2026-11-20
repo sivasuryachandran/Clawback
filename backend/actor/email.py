@@ -1,0 +1,130 @@
+"""send_email(decision, to, subject, body, transport, thread_id=None) -> message id
+
+Walls, in order: decision must be ALLOW; never a real retailer's domain; in DEMO_MODE (on
+unless the env var is exactly "false") `to` must be exactly in DEMO_ALLOWED_RECIPIENTS; the body
+must come from a template (footer present). Then the transport sends and we store the message.
+"""
+import itertools
+import json
+import os
+import uuid
+from datetime import datetime
+from email.message import EmailMessage
+from pathlib import Path
+from typing import Protocol
+
+from backend.agent import clock
+from backend.agent.deps import db
+
+FOOTER_MARK = "Sent by Clawback on behalf of "
+SENDER = "clawback@clawback.test"
+
+
+class EmailRefused(Exception):
+    pass
+
+
+def demo_mode() -> bool:
+    return os.environ.get("DEMO_MODE") != "false"
+
+
+def allowed_recipients() -> frozenset:
+    raw = os.environ.get("DEMO_ALLOWED_RECIPIENTS", "")
+    return frozenset(a.strip().lower() for a in raw.split(",") if a.strip())
+
+
+def _retailer_domains() -> set[str]:
+    out = {"target.com", "bestbuy.com", "amazon.com"}
+    for r in db.query("SELECT store, support_domains FROM store_policies"):
+        if r["store"] != "mockstore" and r["support_domains"]:
+            doms = r["support_domains"]
+            out |= set(json.loads(doms) if isinstance(doms, str) else doms)
+    return out
+
+
+# ---------- transports ----------
+
+class Transport(Protocol):
+    def send(self, to: str, subject: str, body: str, thread_id: str | None) -> tuple[str, str]:
+        """Returns (message_id, thread_id)."""
+
+
+class FileTransport:
+    """Default tonight: each email becomes outbox/<timestamp>.eml."""
+    _n = itertools.count(1)
+
+    def __init__(self, folder: str | None = None):
+        self.folder = Path(folder or os.environ.get("OUTBOX_DIR", "outbox"))
+
+    def send(self, to, subject, body, thread_id):
+        self.folder.mkdir(parents=True, exist_ok=True)
+        msg_id = f"<{uuid.uuid4().hex}@clawback.test>"
+        thread_id = thread_id or f"thr_{uuid.uuid4().hex[:12]}"
+        m = EmailMessage()
+        m["From"], m["To"], m["Subject"] = SENDER, to, subject
+        m["Message-ID"], m["X-Clawback-Thread"] = msg_id, thread_id
+        m.set_content(body)
+        name = f"{datetime.now():%Y%m%d-%H%M%S-%f}-{next(self._n):03d}.eml"
+        (self.folder / name).write_bytes(bytes(m))
+        return msg_id, thread_id
+
+
+class AirbyteGmailTransport:
+    """Airbyte Gmail agent connector, hosted mode (AIRBYTE_CLIENT_ID / _SECRET / _WORKSPACE_NAME).
+    NOT WIRED TONIGHT (rehearsal ran fully local). At the event, check the connector docs for:
+    whether it exposes a SEND action at all (agent connectors are often read-only), the entity
+    and action names, the auth flow in hosted mode, and whether it returns a Gmail threadId so
+    replies stay in one thread. If it can't send, use GmailApiTransport instead."""
+
+    def send(self, to, subject, body, thread_id):
+        raise NotImplementedError("Airbyte Gmail send not wired: see class docstring")
+
+
+class GmailApiTransport:
+    """Fallback: Gmail API users.messages.send with threadId. NOT WIRED TONIGHT."""
+
+    def send(self, to, subject, body, thread_id):
+        raise NotImplementedError("Gmail API send not wired")
+
+
+def get_transport() -> Transport:
+    kind = os.environ.get("EMAIL_TRANSPORT", "file")
+    if kind == "airbyte":
+        return AirbyteGmailTransport()
+    if kind == "gmail_api":
+        return GmailApiTransport()
+    return FileTransport()
+
+
+# ---------- the one way out ----------
+
+def send_email(decision, to: str, subject: str, body: str, transport, thread_id: str | None = None) -> str:
+    name = getattr(decision, "decision", decision)
+    if name != "ALLOW":
+        raise EmailRefused(f"decision is {name}, not ALLOW")
+    to_n = (to or "").strip().lower()
+    if not to_n or "@" not in to_n:
+        raise EmailRefused("no recipient")
+    if to_n.rsplit("@", 1)[1] in _retailer_domains():
+        raise EmailRefused(f"{to_n} is a real retailer; Clawback never emails retailers")
+    if demo_mode() and to_n not in allowed_recipients():
+        raise EmailRefused(f"demo mode: {to_n} is not on DEMO_ALLOWED_RECIPIENTS")
+    if FOOTER_MARK not in body:
+        raise EmailRefused("body is not from a template")
+    h = getattr(decision, "proposal_hash", None)
+    msg_id, thread = transport.send(to_n, subject, body, thread_id)
+    opp = db.query("SELECT opportunity_id FROM proposals WHERE proposal_hash = %s", (h,))
+    db.execute(
+        "INSERT INTO messages (opportunity_id, proposal_hash, direction, thread_id, to_addr, "
+        "subject, body, sent_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        (opp[0]["opportunity_id"] if opp else None, h, "out", thread, to_n, subject, body, clock.ts()))
+    return msg_id
+
+
+def send_template(decision, p: dict, transport=None) -> str:
+    """Render the proposal's template from DB facts and send it."""
+    from backend.actor.templates import facts, render
+    f = facts(p["opportunity_id"])
+    subject, body = render(p["email"]["template"], f)
+    return send_email(decision, p["email"]["to"], subject, body, transport or get_transport(),
+                      thread_id=p["email"].get("thread_id"))
