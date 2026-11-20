@@ -288,6 +288,8 @@ function renderSide() {
 // ---- wiring ---------------------------------------------------------------
 const screens = { money, needs, purchases, schedules, pact, activity, about };
 let tab = "money", busy = false, orbHold = null, selected = null;
+function latestPerItem(acts) { const m = new Map(); acts.forEach((x) => { const k = x.line_item_id ?? x.opportunity_id; if (!m.has(k)) m.set(k, x); }); return [...m.values()]; }
+const pendingOk = () => latestPerItem(activityCache).filter((x) => x.decision === "ASK" && x.approval_id);
 const wide = () => matchMedia("(min-width:960px)").matches;
 async function render(keepScroll) {
   if (busy) return; busy = true;
@@ -299,10 +301,10 @@ async function render(keepScroll) {
   refreshPactChip();
   document.body.classList.toggle("mini", tab !== "money");
   if (tab === "money") { $("#ask").hidden = false; } else if (!document.body.classList.contains("ask-open")) { $("#ask").hidden = true; }
-  const pending = activityCache.filter((x) => x.decision === "ASK" && x.approval_id).length;
+  const pending = pendingOk().length;
   const bd = $("#badge"); bd.hidden = !pending; bd.textContent = pending;
   renderSide();
-  if (window.Orb && !window.Orb.busy) Orb.set(orbHold || (activityCache.some((a) => a.decision === "ASK" && a.approval_id) ? "ask" : "idle"));
+  if (window.Orb && !window.Orb.busy) Orb.set(orbHold || (pendingOk().length ? "ask" : "idle"));
   document.querySelectorAll("nav a, .rail-foot .links a").forEach((a) => a.classList.toggle("on", a.dataset.tab === tab));
   if (keepScroll) scrollTo(0, y);
   busy = false;
@@ -370,5 +372,5 @@ Voice.init({
   api, usd, ruleSentence, cap, backTotal,
   openNeeds: () => { location.hash = "#needs"; },
   pause: async () => { await api("/pact/pause", { method: "POST" }); render(); },
-  orb: (s) => { if (window.Orb) { Orb.busy = s !== "idle"; Orb.set(s === "idle" ? (activityCache.some((x) => x.decision === "ASK" && x.approval_id) ? "ask" : "idle") : s); } },
+  orb: (s) => { if (window.Orb) { Orb.busy = s !== "idle"; Orb.set(s === "idle" ? (pendingOk().length ? "ask" : "idle") : s); } },
 });
