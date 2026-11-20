@@ -9,7 +9,7 @@ import os
 from datetime import date, timedelta
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from backend.agent import clock
 from backend.agent.deps import db, pact, track
@@ -32,6 +32,12 @@ class LLMChoice(BaseModel):
     template: Optional[Template] = None
     alert_at: Optional[date] = None
     reasoning: str = Field(min_length=1, max_length=600)
+
+    @field_validator("template", "alert_at", mode="before")
+    @classmethod
+    def _null_strings(cls, v):
+        """Open-weight models often write the STRING 'None'/'null' for an unused optional field. That means 'no value'."""
+        return None if isinstance(v, str) and v.strip().lower() in ("", "none", "null", "n/a") else v
 
     @model_validator(mode="after")
     def _consistent(self):

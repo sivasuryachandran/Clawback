@@ -928,3 +928,14 @@ def test_provider_selection(monkeypatch):
     assert isinstance(llm.get_llm(), llm.RuleBasedLLM)
     monkeypatch.delenv("LLM_PROVIDER")
     assert isinstance(llm.get_llm(), llm.RuleBasedLLM)  # no key, no provider -> offline rules
+
+
+def test_llm_choice_treats_string_none_as_no_value():
+    """Open-weight models write 'None'/'null' as text for an unused field; that must not invalidate a correct choice."""
+    from backend.agent.propose import LLMChoice
+    c = LLMChoice.model_validate({"action_type": "none", "template": "None", "alert_at": "null", "reasoning": "final sale"})
+    assert c.template is None and c.alert_at is None
+    c = LLMChoice.model_validate({"action_type": "price_adjust_email", "template": "price_adjust_v1", "alert_at": "None", "reasoning": "drop"})
+    assert c.template == "price_adjust_v1" and c.alert_at is None
+    c = LLMChoice.model_validate({"action_type": "deadline_alert", "template": "None", "alert_at": "2026-11-21", "reasoning": "soon"})
+    assert str(c.alert_at) == "2026-11-21"
