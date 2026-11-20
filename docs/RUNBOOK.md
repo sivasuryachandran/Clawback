@@ -90,6 +90,9 @@ Single worker, no `--reload` during rehearsal or the demo (see gotcha 2).
    - **Stop reasons:** event `gate_decision`, filter `decision = BLOCK`, group by `failed_rule`.
    - Charts need the events to exist before they can be picked: run `python scripts/seed_amplitude_events.py --send` once, build the charts, then add the filter
      `seed != true` to each (or use a separate test project). Every sample event is tagged `seed=true` and `user_id=u_seed`, and is not counted in Under the hood.
+   - **One run per chart.** Set `ANALYTICS_RUN_TAG=<name>` (e.g. `final-take`) in `.env` before the run you want to show. Every event sent to Amplitude then carries `run_tag`, and each chart is
+     filtered to `run_tag = <name>` (Filter by → run_tag), so rehearsals, tests and earlier takes stay out of the screenshot. Charts only offer a tag value after an event with it arrived.
+     For the recorded run: pick a new tag, do the run, then change the three charts' filter to that tag and refresh the dashboard.
 3. Paste the dashboard's share link in `AMPLITUDE_DASHBOARD_URL` (it shows on Under the hood → Analytics).
 4. Screenshot the dashboard for the submission. (Amplitude alone covers the "Amplitude or Statsig" prize.)
 

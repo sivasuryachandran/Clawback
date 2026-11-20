@@ -46,6 +46,15 @@ def test_payload_shape_for_amplitude_http_api_v2(amp):
     assert len(ev["user_id"]) >= 5 and ev["insert_id"] and isinstance(ev["time"], int)
 
 
+def test_run_tag_is_sent_only_when_set(amp, monkeypatch):
+    events.track("gate_decision", {"decision": "ALLOW"})
+    monkeypatch.setenv("ANALYTICS_RUN_TAG", "final-take")
+    events.track("gate_decision", {"decision": "BLOCK"})
+    sent = [json.loads(r.content)["events"][0]["event_properties"] for r in amp.requests]
+    assert "run_tag" not in sent[0] and sent[1]["run_tag"] == "final-take"
+    assert "run_tag" not in events.recent(limit=1)[0]["props"]                    # the local log and Under the hood stay unchanged
+
+
 def test_insert_ids_are_unique(amp):
     events.track("money_recovered", {"amount_usd": 34})
     events.track("money_recovered", {"amount_usd": 34})
