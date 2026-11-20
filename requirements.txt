@@ -10,3 +10,4 @@ python-dotenv>=1.0
 pytest>=8.0
 airbyte-agent-sdk
 sie-sdk; python_version >= "3.12"
+anthropic>=0.40        # Teammate B: only needed when LLM_API_KEY is set

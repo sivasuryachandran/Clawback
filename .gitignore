@@ -16,3 +16,8 @@ clawback-team-split-v4*.md
 *.log
 frontend/.next/
 next-env.d.ts
+*.pyc
+dev/*.db
+outbox/
+*.eml
+inbox/
