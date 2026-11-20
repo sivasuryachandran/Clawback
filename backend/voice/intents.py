@@ -21,7 +21,7 @@ from . import stories as st
 REFUSAL = "I can't do that by voice. Approvals and changes happen on screen."
 HELP = "I can tell you what I did, why, or pause. Approvals happen on screen."
 PAUSE_ASK = "Say yes to pause Clawback."
-PAUSED = "Clawback is paused. Nothing will happen until you turn it back on, on screen."
+PAUSED = "Clawback is paused. It won't act until you sign a new Pact on screen."
 PAUSE_FAILED = "I couldn't pause just now. Please tap Pause Clawback on screen."
 PAUSE_CANCELLED = "Okay, I won't pause."
 PENDING_TTL_S = 30

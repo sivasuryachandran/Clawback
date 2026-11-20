@@ -135,10 +135,10 @@ def build(now: datetime | None = None) -> SampleDB:
 
     # orders + line items (ids 1..6), listings (1..5 mock store with the real stable ids, 6 Best Buy, 7 Target)
     items = [
-        ("mockstore", "MS-55034", "2026-11-11", "2026-11-13", "Aurora Wireless Earbuds", "MS-1001", "Black", "electronics", 129.99, 0.97),
+        ("mockstore", "MS-55001", "2026-11-11", "2026-11-13", "Aurora Wireless Earbuds", "MS-1001", "Black", "electronics", 129.99, 0.97),
         ("mockstore", "MS-55021", "2026-11-02", "2026-11-04", "Nimbus Smart Lamp", "MS-2002", "White", "home", 239.00, 0.96),
-        ("mockstore", "MS-55041", "2026-11-12", "2026-11-14", "Trailhead Backpack", "MS-3003", "Black", "outdoor", 89.00, 0.95),
-        ("mockstore", "MS-55029", "2026-11-10", "2026-11-12", "Breeze Desk Fan", "MS-4004", "Gray", "clearance", 59.00, 0.94),
+        ("mockstore", "MS-55031", "2026-11-12", "2026-11-14", "Trailhead Backpack", "MS-3003", "Black", "outdoor", 89.00, 0.95),
+        ("mockstore", "MS-55041", "2026-11-10", "2026-11-12", "Breeze Desk Fan", "MS-4004", "Gray", "clearance", 59.00, 0.94),
         ("bestbuy", "BBY01-SAMPLE", "2026-11-14", "2026-11-16", "Sample Best Buy keyboard", "BB-SAMPLE", "Black", "electronics", 109.99, 0.9),
         ("target", "TGT-SAMPLE", "2026-10-22", "2026-10-24", "Sample Target air fryer", "TG-SAMPLE", "Silver", "home", 89.99, 0.9),
     ]
@@ -224,7 +224,7 @@ def build(now: datetime | None = None) -> SampleDB:
 
     # messages: claim out, support reply in, proof out
     R("INSERT INTO messages(opportunity_id,proposal_hash,direction,thread_id,to_addr,subject,body,sent_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
-      (1, _h("ear"), "out", "thr_sample_1", "support@mockstore.example", "Price adjustment request: order MS-55034", "(sample)", ago(minutes=6)))
+      (1, _h("ear"), "out", "thr_sample_1", "support@mockstore.example", "Price adjustment request: order MS-55001", "(sample)", ago(minutes=6)))
     R("INSERT INTO messages(opportunity_id,proposal_hash,direction,thread_id,to_addr,subject,body,sent_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
       (1, None, "in", "thr_sample_1", "demo@example.com", "Re: Price adjustment request", "Please send proof.", ago(minutes=5)))
     R("INSERT INTO messages(opportunity_id,proposal_hash,direction,thread_id,to_addr,subject,body,sent_at) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
