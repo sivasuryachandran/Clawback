@@ -157,3 +157,26 @@ def test_newsletter_is_ignored_not_turned_into_an_order():
 
     parsed = parser._fallback_parse(_read_eml_body("newsletter.eml"))
     assert parsed["items"] == []
+
+
+def test_singlestore_connection_retries_transient_1042(monkeypatch):
+    """Helios sometimes answers 1042 (server-side reverse DNS of our IP) once, then works: connection() must retry."""
+    import types
+    from backend import db
+    calls = {"n": 0}
+
+    class Op(Exception):
+        pass
+
+    def connect(url, **kw):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise Op(1042, "Unable to get address information for host")
+        return "CONN"
+
+    fake = types.SimpleNamespace(connect=connect, exceptions=types.SimpleNamespace(OperationalError=Op))
+    monkeypatch.setitem(__import__("sys").modules, "singlestoredb", fake)
+    monkeypatch.setattr(db, "using_singlestore", lambda: True)
+    monkeypatch.setattr(db, "_singlestore_url", lambda: "x")
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    assert db.connection() == "CONN" and calls["n"] == 3
