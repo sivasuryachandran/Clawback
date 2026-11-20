@@ -38,9 +38,9 @@ def test_sign_pause_and_new_version(client):
     r = client.post("/pact", json={}).json()
     assert r["signed"] and r["version"] == 1 and not r["paused"]
     assert client.post("/pact/pause").json()["paused"] is True          # revocation row, status column untouched by the gate
-    r2 = client.post("/pact", json={"min_net_savings": 20}).json()
+    r2 = client.post("/pact", json={"min_net_savings_usd": 20}).json()
     assert r2["version"] == 2 and not r2["paused"] and r2["current"]
-    assert r2["limits"]["min_net_savings"] == 20
+    assert r2["limits"]["min_net_savings_usd"] == 20
 
 
 def test_cannot_sign_without_persona(client):
@@ -51,6 +51,6 @@ def test_cannot_sign_without_persona(client):
 def test_tampered_pact_text_is_not_active(client):
     client.post("/pact", json={})
     import backend.db as db
-    text = db.query("SELECT pact_text FROM pacts")[0]["pact_text"].replace('"monthly_cap":300', '"monthly_cap":999999')
+    text = db.query("SELECT pact_text FROM pacts")[0]["pact_text"].replace('"monthly_cap_usd":300', '"monthly_cap_usd":999999')
     db.execute("UPDATE pacts SET pact_text=%s", (text,))
     assert client.get("/pact").json() == {"signed": False}

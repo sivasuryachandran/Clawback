@@ -12,9 +12,15 @@ try:
 except ImportError:
     from dev.stubs import db  # noqa: F401
 
+# Siva's real gate reads the real database (A's backend/db.py, or Siva's devkit stand-in), so it is
+# only used when backend.db exists. Until then the stub gate pairs with the stub db (consistent pair).
+_REAL_DB = db.__name__ == "backend.db"
 try:
+    if not _REAL_DB:
+        raise ImportError("real pact needs the real db")
     import backend.pact as pact  # type: ignore  # Siva
     pact.run_gate  # noqa: B018  (fail over if the package exists but is empty)
+    pact.active_pact, pact.build_context, pact.record  # noqa: B018
 except (ImportError, AttributeError):
     from dev.stubs import pact  # noqa: F401
 

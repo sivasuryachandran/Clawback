@@ -247,7 +247,7 @@ async function activity() {
     ${[...days].map(([d, list]) => `<div class="tl-day">${esc(new Date(d + "T00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }))}</div><div class="tl">${list.map(row).join("")}</div>`).join("") || `<p class="sub">Nothing here yet.</p>`}`;
 }
 
-const FIELDS = { price_adjust: true, rebuy: true, min_net_savings: 10, ask_first_above: 150, max_rebuy_price_usd: 250, monthly_cap: 300, skip_clearance_and_gift_cards: true };
+const FIELDS = { price_adjust: true, rebuy: true, min_net_savings_usd: 10, ask_first_above_usd: 150, max_rebuy_price_usd: 250, monthly_cap_usd: 300, skip_clearance_and_gift_cards: true };
 let form = { ...FIELDS }, editing = false;
 async function pact() {
   const [p, who] = await Promise.all([api("/pact"), api("/persona/status").catch(() => ({ persona_status: "none" }))]);
@@ -255,9 +255,9 @@ async function pact() {
     const L = p.limits;
     const kv = (k, v) => `<div>${k}</div><div>${v}</div>`;
     return `<div class="ph"><div><h1>Your Pact</h1><p class="sub">The rules Clawback can never go beyond.</p></div><span class="pill ${p.paused || !p.current ? "gray" : "green"}">${p.paused ? "Paused" : "Active"} · version ${esc(p.version)} · ${esc(p.short_hash)}</span></div>
-      <div class="grid2"><div class="card"><div class="item-title">Your limits</div><div class="kv" style="margin-top:6px">${kv("Only act if I save at least", usd(L.min_net_savings))}${kv("Ask me first above", usd(L.ask_first_above))}${kv("Most at once", usd(L.max_rebuy_price_usd))}${kv("Per month", usd(L.monthly_cap))}${kv("Stores", L.stores.map(cap).join(", "))}${kv("Valid until", esc(p.valid_until))}</div></div>
+      <div class="grid2"><div class="card"><div class="item-title">Your limits</div><div class="kv" style="margin-top:6px">${kv("Only act if I save at least", usd(L.min_net_savings_usd))}${kv("Ask me first above", usd(L.ask_first_above_usd))}${kv("Most at once", usd(L.max_rebuy_price_usd))}${kv("Per month", usd(L.monthly_cap_usd))}${kv("Stores", L.stores.map(cap).join(", "))}${kv("Valid until", esc(p.valid_until))}</div></div>
       <div class="card"><div class="item-title">In plain words</div>
-      <p>Clawback may ask ${L.stores.map(cap).join(", ")} for price adjustments${L.allowed_actions.includes("rebuy_return") ? " and may buy again and return" : ""}, only when you save at least ${usd(L.min_net_savings)}, never over ${usd(L.max_rebuy_price_usd)} at once or ${usd(L.monthly_cap)} a month. It asks you first above ${usd(L.ask_first_above)}. Valid until ${esc(p.valid_until)}.</p>
+      <p>Clawback may ask ${L.stores.map(cap).join(", ")} for price adjustments${L.actions.includes("rebuy_return") ? " and may buy again and return" : ""}, only when you save at least ${usd(L.min_net_savings_usd)}, never over ${usd(L.max_rebuy_price_usd)} at once or ${usd(L.monthly_cap_usd)} a month. It asks you first above ${usd(L.ask_first_above_usd)}. Valid until ${esc(p.valid_until)}.</p>
       
       <div class="row"><button class="ghost" data-edit>Edit limits</button>${p.paused ? "" : `<button class="ghost" data-pause>Pause Clawback</button>`}</div></div></div>`;
   }
@@ -269,9 +269,9 @@ async function pact() {
   const num = (k, label) => `<label class="f"><span>${label}</span><input type="number" min="0" data-f="${k}" value="${form[k]}"></label>`;
   const tog = (k, label) => `<label class="f"><span>${label}</span><input type="checkbox" data-f="${k}" ${form[k] ? "checked" : ""}></label>`;
   if (step === 2) return `<h1>Set your limits</h1>${steps}${tog("price_adjust", "Ask the store for money back when prices drop")}${tog("rebuy", "Buy again and return when that saves more")}
-    ${num("min_net_savings", "Only act if I save at least $")}${num("ask_first_above", "Ask me first above $")}${num("max_rebuy_price_usd", "Never spend more than $ at once")}${num("monthly_cap", "$ a month max")}${tog("skip_clearance_and_gift_cards", "Skip clearance and gift cards")}
+    ${num("min_net_savings_usd", "Only act if I save at least $")}${num("ask_first_above_usd", "Ask me first above $")}${num("max_rebuy_price_usd", "Never spend more than $ at once")}${num("monthly_cap_usd", "$ a month max")}${tog("skip_clearance_and_gift_cards", "Skip clearance and gift cards")}
     <div class="row"><button data-next>Continue</button></div>`;
-  return `<h1>Review and sign</h1>${steps}<div class="card"><p>Clawback may ask Mock Store, Target and Best Buy for price adjustments${form.rebuy ? " and may buy again and return" : ""}, only when you save at least ${usd(form.min_net_savings)}, never over ${usd(form.max_rebuy_price_usd)} at once or ${usd(form.monthly_cap)} a month, and it asks you first above ${usd(form.ask_first_above)}. Valid for 90 days.</p></div>
+  return `<h1>Review and sign</h1>${steps}<div class="card"><p>Clawback may ask Mock Store, Target and Best Buy for price adjustments${form.rebuy ? " and may buy again and return" : ""}, only when you save at least ${usd(form.min_net_savings_usd)}, never over ${usd(form.max_rebuy_price_usd)} at once or ${usd(form.monthly_cap_usd)} a month, and it asks you first above ${usd(form.ask_first_above_usd)}. Valid for 90 days.</p></div>
     <div class="row"><button data-sign>Sign my Pact</button><button class="ghost" data-back>Back</button></div>`;
 }
 

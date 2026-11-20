@@ -23,10 +23,10 @@ BESTBUY_POLICY = dict(MOCK_POLICY, store="bestbuy", claim_channel="chat", suppor
 
 def make_pact(**over):
     body = dict(pact_id="pact_1", version=1, user_id="u_demo", created_at="2026-11-20",
-                expires_at="2027-02-18", allowed_actions=["price_adjust_email", "claim_packet", "rebuy_return", "deadline_alert"],
+                expires_at="2027-02-18", actions=["price_adjust_email", "claim_packet", "rebuy_return", "deadline_alert"],
                 stores=["mockstore", "target", "bestbuy"], excluded_categories=["clearance", "gift_cards"],
-                min_net_savings=10, ask_first_above=150, max_rebuy_price_usd=250, monthly_cap=300,
-                buffer_days=2, max_claims_per_order=1, max_followups=3, persona_inquiry_id="inq_1")
+                min_net_savings_usd=10, ask_first_above_usd=150, max_rebuy_price_usd=250, monthly_cap_usd=300,
+                buffer_days=2, max_claims_per_order=1, max_followups_per_thread=3, persona_inquiry_id="inq_1")
     body.update(over)
     return json_load(sign.sign(body))
 

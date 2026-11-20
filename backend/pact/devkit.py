@@ -47,6 +47,16 @@ def _now() -> datetime:
     return datetime.utcnow().replace(microsecond=0)
 
 
+class _SharedConn:
+    """B closes the connection after execute_once; the stand-in shares one, so close() is a no-op."""
+    def __init__(self, conn): self._c = conn
+    def cursor(self): return self._c.cursor()
+    def commit(self): return self._c.commit()
+    def close(self): pass
+    def __getattr__(self, n): return getattr(self._c, n)
+    __module__ = "sqlite3"          # once.py picks the "?" placeholder from the module name
+
+
 # --------------------------------------------------------------------------- db
 class FakeDB(types.ModuleType):
     """Same surface as A's backend/db.py: query(), execute(), connection()."""
@@ -75,13 +85,13 @@ class FakeDB(types.ModuleType):
             return self._conn.execute(self._sql(sql), tuple(params)).lastrowid
 
     def connection(self):
-        return self._conn
+        return _SharedConn(self._conn)
 
     def reset(self):
         with _lock:
             self._conn.close()
             self._new()
-            seed(self)
+            seed(self, getattr(self, "run_pipeline", True))
 
 
 # ------------------------------------------------------------------------- actors
@@ -108,7 +118,7 @@ class _Actor(types.ModuleType):
                                 (opportunity_id, decision.proposal_hash, _now().strftime(FMT)))
 
 
-def install(db_module: bool = True, actor_module: bool = True):
+def install(db_module: bool = True, actor_module: bool = True, run_pipeline: bool = True):
     """Install stand-ins only for modules that don't exist yet. Returns what was installed."""
     import importlib
     import backend
@@ -116,9 +126,10 @@ def install(db_module: bool = True, actor_module: bool = True):
     db = None
     if db_module and not _exists("backend.db"):
         db = FakeDB()
+        db.run_pipeline = run_pipeline
         sys.modules["backend.db"] = db
         backend.db = db
-        seed(db)
+        seed(db, run_pipeline)
         installed.append("db")
     if not _exists("backend.watch"):          # A's watch module: stand-in that finds nothing new
         w = types.ModuleType("backend.watch"); w.tick = lambda: []; w.IS_DEVKIT = True
@@ -171,7 +182,7 @@ def propose(db, opp: dict) -> dict:
     return p
 
 
-def seed(db) -> None:
+def seed(db, run_pipeline: bool = True) -> None:
     """The six rows from section 3.8, dated relative to today, then run the real gate on each."""
     from . import sign as signer
     from .context import active_pact, build_context, record
@@ -229,11 +240,13 @@ def seed(db) -> None:
 
     # a signed Pact for the demo user (the real one is created through POST /pact)
     pact = {"pact_id": "pact_dev", "version": 1, "user_id": "u_demo", "persona_inquiry_id": "inq_dev", "created_at": today.isoformat(),
-            "expires_at": (today + timedelta(days=90)).isoformat(), "allowed_actions": ["price_adjust_email", "claim_packet", "rebuy_return", "deadline_alert"],
-            "stores": ["mockstore", "target", "bestbuy"], "excluded_categories": ["clearance", "gift_cards"], "min_net_savings": 10,
-            "ask_first_above": 150, "max_rebuy_price_usd": 250, "monthly_cap": 300, "buffer_days": 2, "max_claims_per_order": 1, "max_followups": 3}
+            "expires_at": (today + timedelta(days=90)).isoformat(), "actions": ["price_adjust_email", "claim_packet", "rebuy_return", "deadline_alert"],
+            "stores": ["mockstore", "target", "bestbuy"], "excluded_categories": ["clearance", "gift_cards"], "min_net_savings_usd": 10,
+            "ask_first_above_usd": 150, "max_rebuy_price_usd": 250, "monthly_cap_usd": 300, "buffer_days": 2, "max_claims_per_order": 1, "max_followups_per_thread": 3}
     db.execute("INSERT INTO pacts VALUES ('pact_dev',1,'u_demo',%s,%s,'active')", (signer.sign(pact), stamp(now)))
 
+    if not run_pipeline:          # B's POST /opportunities/{id}/propose will run propose -> gate -> act
+        return
     # run the real pipeline once per opportunity: propose -> gate -> record -> act / ask
     user = {"id": "u_demo"}
     for opp_id in opps:

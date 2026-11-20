@@ -27,6 +27,13 @@ def env(tmp_path, monkeypatch):
     from dev.app import app
     from dev.stubs import mockstore, seed
 
+    # B's tests read events from the stub; once C's real track exists, point B's modules back at the stub.
+    import importlib
+    from dev.stubs import analytics as stub_analytics
+    for mod in ("backend.agent.replies", "backend.actor.email", "backend.agent.policy", "backend.agent.inbox",
+                "backend.agent.api", "backend.agent.propose"):
+        monkeypatch.setattr(importlib.import_module(mod), "track", stub_analytics.track)
+
     ids = seed.reset_and_seed()
     client = TestClient(app)
     set_http_client(client)

@@ -213,7 +213,7 @@ def _evaluate(run: _Run, p: dict, pact: dict | None, ctx: GateContext, human_app
               "Persona approved within 30 days", {"status": ctx.persona_status, "verified_at": str(verified)})
 
     # R2 — action allowed by the Pact
-    allowed = set(pact.get("allowed_actions") or [])
+    allowed = set(pact.get("actions") or [])
     ok = a in allowed or (a == "claim_followup" and bool(allowed & CLAIMS))
     run.check("R2", ok, "action is allowed by the Pact", {"action": a, "allowed": sorted(allowed)})
 
@@ -271,7 +271,7 @@ def _evaluate(run: _Run, p: dict, pact: dict | None, ctx: GateContext, human_app
         if a == "rebuy_return":
             fees = _num(policy.get("restocking_fee_pct") or 0) * paid + _num(policy.get("return_shipping_usd") or 0)
         net = round(paid - price - fees, 2)
-        minimum = _num(pact.get("min_net_savings", 0))
+        minimum = _num(pact.get("min_net_savings_usd", 0))
         run.check("R8", net >= minimum, "net savings meet the minimum", {"paid": paid, "price": price, "fees": fees, "net": net, "min": minimum})
         seen = _ts(listing.get("seen_at"))
         run.check("R8a", seen is not None and now - seen <= PRICE_MAX_AGE, "price seen within 15 minutes", {"seen_at": str(seen)})
@@ -281,7 +281,7 @@ def _evaluate(run: _Run, p: dict, pact: dict | None, ctx: GateContext, human_app
         price = _num(listing["price"])
         run.check("R9", price <= _num(pact.get("max_rebuy_price_usd", 0)), "under the per-purchase cap", {"price": price, "cap": pact.get("max_rebuy_price_usd")})
         total = _num(ctx.month_committed) + price
-        run.check("R9", total <= _num(pact.get("monthly_cap", 0)), "under the monthly cap", {"month_committed": ctx.month_committed, "this": price, "cap": pact.get("monthly_cap")})
+        run.check("R9", total <= _num(pact.get("monthly_cap_usd", 0)), "under the monthly cap", {"month_committed": ctx.month_committed, "this": price, "cap": pact.get("monthly_cap_usd")})
 
     # R10 — recipients
     if a in EMAILS:
@@ -308,7 +308,7 @@ def _evaluate(run: _Run, p: dict, pact: dict | None, ctx: GateContext, human_app
         e = p["email"]
         run.check("R13", _email_to(p) == _norm(c.get("recipient")), "same recipient as the claim", {"to": _email_to(p), "claim": c.get("recipient")})
         run.check("R13", (e.get("thread_id") or None) == (c.get("thread_id") or None) and bool(e.get("thread_id")), "same thread", {"thread": e.get("thread_id")})
-        run.check("R13", int(c.get("followups", 0)) < int(pact.get("max_followups", 3)), "fewer than the follow-up limit", {"followups": c.get("followups")})
+        run.check("R13", int(c.get("followups", 0)) < int(pact.get("max_followups_per_thread", 3)), "fewer than the follow-up limit", {"followups": c.get("followups")})
 
     # R12 — ask first
     if human_approved:
@@ -316,7 +316,7 @@ def _evaluate(run: _Run, p: dict, pact: dict | None, ctx: GateContext, human_app
     else:
         if a == "rebuy_return":
             price = _num(listing["price"])
-            run.check("R12", price <= _num(pact.get("ask_first_above", 0)), "under the ask-first limit", {"price": price, "ask": pact.get("ask_first_above")}, on_fail="ASK")
+            run.check("R12", price <= _num(pact.get("ask_first_above_usd", 0)), "under the ask-first limit", {"price": price, "ask": pact.get("ask_first_above_usd")}, on_fail="ASK")
         conf = item.get("parse_confidence")
         run.check("R12", conf is None or _num(conf) >= 0.8, "receipt was read with confidence", {"confidence": conf}, on_fail="ASK")
 
