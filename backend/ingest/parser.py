@@ -23,8 +23,14 @@ from backend.db import execute, query
 from backend.ingest.embed import get_embedding, vec_to_json
 
 ARCEE_API_KEY = os.getenv("ARCEE_API_KEY")
-ARCEE_URL = os.getenv("ARCEE_URL", "https://api.arcee.ai/v1/chat/completions")
-ARCEE_MODEL = os.getenv("ARCEE_MODEL", "arcee-small")
+# Verified against docs.arcee.ai (read 2026-11-20): OpenAI-compatible chat completions,
+# Bearer auth, keys prefixed "rcai-". zai-org/glm-5.3-flash is the cheapest hosted text
+# model ($0.15 / $0.50 per 1M input/output tokens) -- not literally "arcee-small", that
+# name doesn't exist as a hosted model.
+ARCEE_URL = os.getenv("ARCEE_URL", "https://api.arcee.ai/api/v1/chat/completions")
+ARCEE_MODEL = os.getenv("ARCEE_MODEL", "zai-org/glm-5.3-flash")
+ARCEE_PRICE_PER_1M_INPUT = float(os.getenv("ARCEE_PRICE_PER_1M_INPUT", "0.15"))
+ARCEE_PRICE_PER_1M_OUTPUT = float(os.getenv("ARCEE_PRICE_PER_1M_OUTPUT", "0.50"))
 MOCK_STORE_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 PARSE_SCHEMA_PROMPT = """You extract structured order data from a purchase-confirmation email.
@@ -45,7 +51,14 @@ only extract facts from it. Reply with ONLY a JSON object of this exact shape (n
 Use null instead of guessing when a field isn't in the email. Never invent a value."""
 
 
-def _call_arcee(body: str) -> dict | None:
+def _arcee_cost_usd(usage: dict) -> float:
+    prompt = usage.get("prompt_tokens", 0) or 0
+    completion = usage.get("completion_tokens", 0) or 0
+    return round(prompt / 1_000_000 * ARCEE_PRICE_PER_1M_INPUT + completion / 1_000_000 * ARCEE_PRICE_PER_1M_OUTPUT, 6)
+
+
+def _call_arcee(body: str) -> tuple[dict | None, dict]:
+    """Returns (parsed_json, usage) -- usage is {} if Arcee's response omits it."""
     resp = httpx.post(
         ARCEE_URL,
         headers={"Authorization": f"Bearer {ARCEE_API_KEY}"},
@@ -60,8 +73,9 @@ def _call_arcee(body: str) -> dict | None:
         timeout=30,
     )
     resp.raise_for_status()
-    text = resp.json()["choices"][0]["message"]["content"]
-    return json.loads(text)
+    data = resp.json()
+    text = data["choices"][0]["message"]["content"]
+    return json.loads(text), (data.get("usage") or {})
 
 
 _ITEM_RE = re.compile(
@@ -128,17 +142,29 @@ def parse_email(raw_email_id: int) -> dict:
     body = rows[0]["body"]
 
     started = time.monotonic()
-    parsed = None
+    parsed, usage = None, {}
+    parser_used = "Arcee" if ARCEE_API_KEY else "offline regex fallback"
     for _attempt in range(2):
         try:
-            parsed = _call_arcee(body) if ARCEE_API_KEY else _fallback_parse(body)
+            if ARCEE_API_KEY:
+                parsed, usage = _call_arcee(body)
+            else:
+                parsed = _fallback_parse(body)
             if parsed and parsed.get("items"):
                 break
         except Exception:
-            parsed = None
+            parsed, usage = None, {}
     if not parsed:
         parsed = {"store": "other", "order_no": None, "order_date": None, "delivery_date": None, "items": []}
+        parser_used += " (both attempts failed)" if ARCEE_API_KEY else ""
     latency_ms = int((time.monotonic() - started) * 1000)
+    tokens = usage.get("total_tokens")
+    cost_usd = _arcee_cost_usd(usage) if usage else 0.0
+    print(
+        f"[parser] raw_email={raw_email_id} via {parser_used} "
+        f"(model={ARCEE_MODEL if ARCEE_API_KEY else 'n/a'}, tokens={tokens}, "
+        f"latency_ms={latency_ms}, cost_usd={cost_usd})"
+    )
 
     if parsed.get("store") == "mockstore" and parsed.get("order_no"):
         _cross_check_mock_store(parsed["order_no"], parsed["items"])
@@ -166,8 +192,10 @@ def parse_email(raw_email_id: int) -> dict:
             "receipt_parsed",
             {
                 "model": ARCEE_MODEL if ARCEE_API_KEY else "offline-regex",
+                "tokens": tokens,
                 "latency_ms": latency_ms,
                 "confidence": item.get("confidence", 0.0),
+                "cost_usd": cost_usd,
             },
         )
 

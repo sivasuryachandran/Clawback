@@ -9,6 +9,7 @@ draft/
 *.pdf
 .env.*
 !.env.example
+.claude/
 .pytest_last.json
 .analytics_events.jsonl
 *.log
@@ -19,4 +20,5 @@ dev/*.db
 outbox/
 *.eml
 !seed/receipts/*.eml
+!seed/demo_mails/**/*.eml
 inbox/
