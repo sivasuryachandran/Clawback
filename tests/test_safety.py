@@ -122,3 +122,16 @@ def test_persona_signature():
     assert not verify_persona_signature(body, None, secret)
     assert not verify_persona_signature(body, "garbage", secret)
     assert not verify_persona_signature(b'{"data":2}', _hdr(body, secret, t), secret)
+
+
+def test_gate_clock_follows_the_same_env_pins_as_the_agent_clock(monkeypatch):
+    """One clock: CLAWBACK_NOW / CLAWBACK_TODAY pin the gate exactly like B's backend/agent/clock.py."""
+    from backend.pact import context
+    from backend.agent import clock
+    monkeypatch.setenv("CLAWBACK_NOW", "2026-11-20T23:30:00")
+    monkeypatch.delenv("CLAWBACK_TODAY", raising=False)
+    assert context.clock_now() == clock.now() and context.clock_today() == clock.today()
+    monkeypatch.setenv("CLAWBACK_TODAY", "2026-11-20")
+    assert str(context.clock_today()) == "2026-11-20" == str(clock.today())
+    monkeypatch.delenv("CLAWBACK_NOW"); monkeypatch.delenv("CLAWBACK_TODAY")
+    assert abs((context.clock_now() - clock.now()).total_seconds()) < 5

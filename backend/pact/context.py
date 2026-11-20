@@ -10,6 +10,17 @@ from . import sign
 from .gate import GateContext
 
 
+def clock_now() -> datetime:
+    """ONE CLOCK with B's backend/agent/clock.py: CLAWBACK_NOW (ISO, naive UTC) if set, else real UTC."""
+    raw = os.environ.get("CLAWBACK_NOW")
+    return datetime.fromisoformat(raw).replace(tzinfo=None) if raw else datetime.utcnow().replace(microsecond=0)
+
+
+def clock_today():
+    raw = os.environ.get("CLAWBACK_TODAY")
+    return datetime.fromisoformat(raw).date() if raw else clock_now().date()
+
+
 def demo_mode() -> bool:
     return os.environ.get("DEMO_MODE", "true").strip().lower() != "false"      # anything but "false" = on
 
@@ -49,7 +60,7 @@ def active_pact(user_id: str) -> tuple[dict | None, dict]:
 
 def build_context(opportunity_id: int, user: dict) -> GateContext:
     db = _db()
-    now = datetime.utcnow().replace(microsecond=0)
+    now = clock_now()
     opp = db.query("SELECT * FROM opportunities WHERE id=%s", (opportunity_id,))[0]
     item = db.query(
         "SELECT li.*, o.order_no, o.order_date, o.delivery_date FROM line_items li JOIN orders o ON o.id=li.order_id WHERE li.id=%s",
@@ -86,7 +97,7 @@ def build_context(opportunity_id: int, user: dict) -> GateContext:
                          "AND status IN ('done','running')", (item["id"],))[0]["n"]
             claim = {"recipient": m[0]["to_addr"], "thread_id": m[0]["thread_id"], "followups": n}
     return GateContext(
-        today=now.date(), now=now, opportunity=opp, item=item, listing=listing, policy=policy,
+        today=clock_today(), now=now, opportunity=opp, item=item, listing=listing, policy=policy,
         policy_check=pcs[0] if pcs else None, pact_meta=meta,
         persona_status=u["persona_status"], persona_verified_at=u["verified_at"], reverified_at=u["reverified_at"],
         session_user_id=user["id"], pact_owner_id=(pact or {}).get("user_id") or (owner[0]["user_id"] if owner else None),
