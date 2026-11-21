@@ -67,18 +67,14 @@ def window_drift(q: str, cited_text: str | None, policy: dict | None) -> str | N
     None when they agree or the quote gives no day count (no opinion: nothing is invented)."""
     if not cited_text or not policy:
         return None
-    # Only compare when the quote is ABOUT the window being asked (retrieval can hand back a
-    # neighbouring sentence, e.g. the price-match line for a return question): no opinion otherwise.
-    topic = cited_text.lower()
-    if "adjust or match" in q:
-        col, label = "adjust_window_days", "price-adjustment window"
-        if not re.search(r"adjust|price[- ]match|lower price|price protect", topic):
-            return None
-    elif "return window" in q:
-        col, label = "return_window_days", "return window"
-        if not re.search(r"return|exchange", topic):
-            return None
-    else:
+    # Only the price-adjustment window is compared. Return windows are multi-tier at real stores
+    # (Target: 90 days for most items, 365 for its own brands), so "the table's number appears in the
+    # quote" is not a fair test there. And only when the quote is ABOUT price adjustment, since
+    # retrieval can hand back a neighbouring sentence: no opinion otherwise.
+    if "adjust or match" not in q:
+        return None
+    col, label = "adjust_window_days", "price-adjustment window"
+    if not re.search(r"adjust|price[- ]match|lower price|price protect", cited_text.lower()):
         return None
     want = policy.get(col)
     found = {int(n) for n in re.findall(r"(\d+)[\s-]*days?\b", cited_text, flags=re.I)}

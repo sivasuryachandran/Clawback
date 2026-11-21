@@ -1035,8 +1035,10 @@ def test_window_drift_accepts_hyphen_and_any_listed_number():
     adjust_q = "Does Target adjust or match a lower price after purchase for audio items, and for how long?"
     return_q = "How long is the Target return window for audio items, and when does it start?"
     assert window_drift(adjust_q, "purchased in the last 14-days if purchased before", pol) is None
-    assert window_drift(return_q, "90 days for most items; 365 days for Target brand items", pol) is None
-    assert "needs review" in window_drift(return_q, "60 days for most items", pol)
+    # Return windows are multi-tier at real stores: never compared.
+    assert window_drift(return_q, "Returns: 365 days for Target brand items", pol) is None
+    assert window_drift(return_q, "Returns: 60 days for most items", pol) is None
+    assert "needs review" in window_drift(adjust_q, "Price adjustments 7 days from purchase.", pol)
 
 
 def test_real_target_and_bestbuy_text_agree_with_the_seeded_table():
