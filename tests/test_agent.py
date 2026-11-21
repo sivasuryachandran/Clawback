@@ -1053,3 +1053,13 @@ def test_real_target_and_bestbuy_text_agree_with_the_seeded_table():
             except Exception:
                 continue
             assert window_drift(q_, r.get("cited_text"), pol) is None, (store, q_, r.get("cited_text"))
+
+
+def test_window_drift_ignores_a_quote_about_a_different_window():
+    """Retrieval can return the price-match sentence for a return question: no opinion, no false stop."""
+    from backend.agent.policy import window_drift
+    pol = {"adjust_window_days": 14, "return_window_days": 90}
+    return_q = "How long is the Target return window for audio items, and when does it start?"
+    adjust_q = "Does Target adjust or match a lower price after purchase for audio items, and for how long?"
+    assert window_drift(return_q, "It may qualify if purchased in the last 14-days.", pol) is None
+    assert window_drift(adjust_q, "Returns are accepted for 90 days for most items.", pol) is None
