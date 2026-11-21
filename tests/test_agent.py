@@ -983,3 +983,73 @@ def test_llm_choice_treats_string_none_as_no_value():
     assert c.template == "price_adjust_v1" and c.alert_at is None
     c = LLMChoice.model_validate({"action_type": "deadline_alert", "template": "None", "alert_at": "2026-11-21", "reasoning": "soon"})
     assert str(c.alert_at) == "2026-11-21"
+
+
+# ---------- Senso supplies the quote, the table supplies the number: they must agree ----------
+
+def _edit_policy_doc(tmp_path, old, new):
+    import shutil
+    from backend.agent.senso_client import LocalPolicySource, set_policy_source
+    pol = tmp_path / "pol"
+    shutil.copytree("tests/fixtures/policies", pol)
+    doc = pol / "mockstore.md"
+    doc.write_text(doc.read_text().replace(old, new))
+    set_policy_source(LocalPolicySource(str(pol)))
+
+
+def test_quote_and_table_agree_is_a_normal_citation(env):
+    from backend.agent.policy import check_policy
+    row = q("SELECT * FROM policy_checks WHERE id = %s", (check_policy(env.ids["earbuds"], "price_adjust_email"),))[0]
+    assert row["senso_source_id"] and "14 days" in row["cited_text"]
+
+
+def test_senso_edited_but_table_not_stops_as_needs_review(env, tmp_path):
+    from backend.agent.policy import check_policy
+    _edit_policy_doc(tmp_path, "14 days from purchase", "7 days from purchase")
+    row = q("SELECT * FROM policy_checks WHERE id = %s", (check_policy(env.ids["earbuds"], "price_adjust_email"),))[0]
+    assert row["senso_source_id"] is None  # the gate stops on R6
+    assert "needs review" in row["answer"] and "7 days" in row["answer"] and "14 days" in row["answer"]
+    assert "7 days from purchase" in row["cited_text"]  # the real quote is kept for the user
+
+
+def test_table_edited_but_senso_not_stops_as_needs_review(env):
+    from backend.agent.policy import check_policy
+    from dev.stubs import db
+    db.execute("UPDATE store_policies SET adjust_window_days = 7 WHERE store = 'mockstore'")
+    row = q("SELECT * FROM policy_checks WHERE id = %s", (check_policy(env.ids["earbuds"], "price_adjust_email"),))[0]
+    assert row["senso_source_id"] is None and "needs review" in row["answer"]
+
+
+def test_window_drift_has_no_opinion_without_a_day_count():
+    from backend.agent.policy import window_drift
+    pol = {"adjust_window_days": 14, "return_window_days": 30}
+    adjust_q = "Does Best Buy adjust or match a lower price after purchase for audio items, and for how long?"
+    assert window_drift(adjust_q, "Price match through Jan. 15 for most products.", pol) is None
+    assert window_drift(adjust_q, None, pol) is None
+    assert window_drift("Is clearance final sale at Mock Store?", "Clearance is final sale. 3 days", pol) is None
+
+
+def test_window_drift_accepts_hyphen_and_any_listed_number():
+    from backend.agent.policy import window_drift
+    pol = {"adjust_window_days": 14, "return_window_days": 90}
+    adjust_q = "Does Target adjust or match a lower price after purchase for audio items, and for how long?"
+    return_q = "How long is the Target return window for audio items, and when does it start?"
+    assert window_drift(adjust_q, "purchased in the last 14-days if purchased before", pol) is None
+    assert window_drift(return_q, "90 days for most items; 365 days for Target brand items", pol) is None
+    assert "needs review" in window_drift(return_q, "60 days for most items", pol)
+
+
+def test_real_target_and_bestbuy_text_agree_with_the_seeded_table():
+    """The verbatim official quotes must not trip the check against seed/load_seed.py numbers."""
+    from backend.agent.policy import question_for, window_drift
+    from backend.agent.senso_client import LocalPolicySource
+    src = LocalPolicySource("seed/policies")
+    for store, adjust, ret in (("target", 14, 90), ("bestbuy", 14, 15)):
+        pol = {"adjust_window_days": adjust, "return_window_days": ret}
+        for q_ in (f"Does {store} adjust or match a lower price after purchase for audio items, and for how long?",
+                   f"How long is the {store} return window for audio items, and when does it start?"):
+            try:
+                r = src.ask(store, q_)
+            except Exception:
+                continue
+            assert window_drift(q_, r.get("cited_text"), pol) is None, (store, q_, r.get("cited_text"))
