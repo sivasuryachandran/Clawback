@@ -5,6 +5,7 @@ PolicySource; with no source, senso_source_id is NULL and the gate stops on R6.
 """
 import json
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
@@ -57,6 +58,35 @@ def question_for(opp: dict, item: dict, policy: dict | None, action: str | None 
     if opp["kind"] == "deadline" or (policy and not adjust_window_open(item, policy)):
         return return_q
     return adjust_q
+
+
+def window_drift(q: str, cited_text: str | None, policy: dict | None) -> str | None:
+    """The gate enforces the NUMBER in store_policies; Senso supplies the QUOTE. If the quote
+    states a day count for the window being asked about and the table's number is not among
+    them, the two disagree (someone edited one, not the other). Returns a plain sentence, or
+    None when they agree or the quote gives no day count (no opinion: nothing is invented)."""
+    if not cited_text or not policy:
+        return None
+    # Only compare when the quote is ABOUT the window being asked (retrieval can hand back a
+    # neighbouring sentence, e.g. the price-match line for a return question): no opinion otherwise.
+    topic = cited_text.lower()
+    if "adjust or match" in q:
+        col, label = "adjust_window_days", "price-adjustment window"
+        if not re.search(r"adjust|price[- ]match|lower price|price protect", topic):
+            return None
+    elif "return window" in q:
+        col, label = "return_window_days", "return window"
+        if not re.search(r"return|exchange", topic):
+            return None
+    else:
+        return None
+    want = policy.get(col)
+    found = {int(n) for n in re.findall(r"(\d+)[\s-]*days?\b", cited_text, flags=re.I)}
+    if want is None or not found or int(want) in found:
+        return None
+    seen = ", ".join(str(n) for n in sorted(found))
+    return (f"Policy needs review: the store's {label} reads {seen} days in the policy text, "
+            f"but our rules table says {int(want)} days. Nothing was done.")
 
 
 _pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="policy")
@@ -116,6 +146,10 @@ def check_policy(opportunity_id: int, action: str | None = None) -> int:
                             "revision": prev["revision"]}, prev["fetched_at"])
         r = {"answer": f"policy source unavailable: {e!r}"[:500], "cited_text": None,
              "source_url": None, "source_id": None, "revision": None}
+    drift = window_drift(q, r.get("cited_text"), policy)
+    if drift:  # keep the real quote, but withhold the source id: the gate stops on R6
+        track("policy_drift", {"store": store, "detail": drift[:200]})
+        r = r | {"answer": drift, "source_id": None}
     return _insert(opportunity_id, store, q, r, clock.ts())
 
 
